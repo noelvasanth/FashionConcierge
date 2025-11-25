@@ -2,6 +2,10 @@
 
 from typing import List
 
+from adk_app.genai_fallback import ensure_genai_imports
+
+ensure_genai_imports()
+
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
