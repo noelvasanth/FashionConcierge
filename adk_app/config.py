@@ -20,6 +20,7 @@ class ADKConfig:
     location: str = "us-central1"
     model: str = DEFAULT_GEMINI_MODEL
     api_key: Optional[str] = None
+    wardrobe_db_path: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> "ADKConfig":

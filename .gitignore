@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+.db
+data/
 .venv/
 .env
 .env.local
