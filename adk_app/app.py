@@ -1,5 +1,9 @@
 """ADK app bootstrap."""
 
+from adk_app.genai_fallback import ensure_genai_imports
+
+ensure_genai_imports()
+
 from google import generativeai as genai
 from google.generativeai import agent as genai_agent
 
@@ -15,6 +19,8 @@ from tools.calendar import GoogleCalendarProvider
 from tools.weather import OpenWeatherProvider
 from memory.user_profile import UserMemoryService
 from tools.memory_tools import user_profile_tool
+from tools.wardrobe_store import SQLiteWardrobeStore
+from tools.wardrobe_tools import WardrobeTools
 
 
 class FashionConciergeApp:
@@ -27,10 +33,15 @@ class FashionConciergeApp:
         self.memory_service = UserMemoryService()
         self.calendar_provider = GoogleCalendarProvider(project_id=self.config.project_id)
         self.weather_provider = OpenWeatherProvider()
+        self.wardrobe_store = SQLiteWardrobeStore(
+            self.config.wardrobe_db_path or "data/wardrobe.db"
+        )
+        self.wardrobe_tools = WardrobeTools(self.wardrobe_store)
+        self.wardrobe_tool_defs = self.wardrobe_tools.tool_defs()
 
-        self.orchestrator = OrchestratorAgent(config=self.config)
-        self.wardrobe_ingestion = WardrobeIngestionAgent(config=self.config)
-        self.wardrobe_query = WardrobeQueryAgent(config=self.config)
+        self.orchestrator = OrchestratorAgent(config=self.config, tools=self.wardrobe_tool_defs)
+        self.wardrobe_ingestion = WardrobeIngestionAgent(config=self.config, tools=self.wardrobe_tool_defs)
+        self.wardrobe_query = WardrobeQueryAgent(config=self.config, tools=self.wardrobe_tool_defs)
         self.calendar_agent = CalendarAgent(config=self.config, provider=self.calendar_provider)
         self.weather_agent = WeatherAgent(config=self.config, provider=self.weather_provider)
         self.outfit_stylist = OutfitStylistAgent(config=self.config)
@@ -49,6 +60,8 @@ class FashionConciergeApp:
         app.register(self.weather_agent.adk_agent)
         app.register(self.outfit_stylist.adk_agent)
         app.register(self.quality_critic.adk_agent)
+        for tool in self.wardrobe_tool_defs:
+            app.register(tool)
 
         # Attach memory tool to orchestrator for early personalization hooks.
         app.register(user_profile_tool(self.memory_service))

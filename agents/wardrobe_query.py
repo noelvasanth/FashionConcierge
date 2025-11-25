@@ -2,6 +2,10 @@
 
 from typing import Dict, List
 
+from adk_app.genai_fallback import ensure_genai_imports
+
+ensure_genai_imports()
+
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
@@ -10,8 +14,9 @@ from adk_app.config import ADKConfig
 class WardrobeQueryAgent:
     """Retrieves and filters wardrobe items for an event."""
 
-    def __init__(self, config: ADKConfig) -> None:
+    def __init__(self, config: ADKConfig, tools: list | None = None) -> None:
         self.config = config
+        self.tools = tools or []
         self.system_instruction = (
             "You query the wardrobe store, apply filters for season, mood and "
             "formality, and return candidate items for outfit building."
@@ -20,7 +25,7 @@ class WardrobeQueryAgent:
             model=self.config.model,
             system_instruction=self.system_instruction,
             name="wardrobe-query",
-            tools=[],
+            tools=self.tools,
         )
 
     @property

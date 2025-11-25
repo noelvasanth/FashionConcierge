@@ -4,6 +4,10 @@ from abc import ABC, abstractmethod
 from datetime import date
 from typing import Dict
 
+from adk_app.genai_fallback import ensure_genai_imports
+
+ensure_genai_imports()
+
 from google.generativeai import agent as genai_agent
 
 

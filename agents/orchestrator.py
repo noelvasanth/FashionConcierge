@@ -2,6 +2,10 @@
 
 from typing import Any, Dict
 
+from adk_app.genai_fallback import ensure_genai_imports
+
+ensure_genai_imports()
+
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
@@ -16,8 +20,9 @@ class OrchestratorAgent:
     workflow.
     """
 
-    def __init__(self, config: ADKConfig) -> None:
+    def __init__(self, config: ADKConfig, tools: list | None = None) -> None:
         self.config = config
+        self.tools = tools or []
         self.system_instruction = (
             "You are the Fashion Concierge orchestrator. Receive user inputs, "
             "plan the next steps across calendar, weather, wardrobe and stylist "
@@ -32,7 +37,7 @@ class OrchestratorAgent:
             model=self.config.model,
             system_instruction=self.system_instruction,
             name="orchestrator",
-            tools=[],
+            tools=self.tools,
         )
 
     @property
