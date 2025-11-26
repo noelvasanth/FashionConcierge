@@ -1,39 +1,28 @@
-"""Weather provider abstractions and tools."""
+"""Deprecated weather compatibility shim.
 
-from abc import ABC, abstractmethod
-from datetime import date
-from typing import Dict
+Callers should import from :mod:`tools.weather_provider` going forward. The
+validated provider interfaces remain available here for backwards
+compatibility while documentation migrates fully to the canonical module.
+"""
 
-from adk_app.genai_fallback import ensure_genai_imports
+from warnings import warn
 
-ensure_genai_imports()
+from tools.weather_provider import (
+    MockWeatherProvider,
+    OpenWeatherProvider,
+    WeatherProfile,
+    WeatherProvider,
+)
 
-from google.generativeai import agent as genai_agent
+warn(
+    "tools.weather is deprecated; import from tools.weather_provider instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-
-class WeatherProvider(ABC):
-    """Abstract weather provider interface."""
-
-    @abstractmethod
-    def get_forecast(self, location: str, date: date) -> Dict[str, str]:
-        """Return a weather forecast payload."""
-
-    def as_tool(self) -> genai_agent.Tool:
-        return genai_agent.Tool(
-            name="get_weather_forecast",
-            description="Get weather forecast for a location and date.",
-            func=self.get_forecast,
-        )
-
-
-class OpenWeatherProvider(WeatherProvider):
-    """Simple placeholder provider."""
-
-    def get_forecast(self, location: str, date: date) -> Dict[str, str]:
-        return {
-            "location": location,
-            "date": date.isoformat(),
-            "min_temp_c": 12,
-            "max_temp_c": 18,
-            "rain_chance": 0.15,
-        }
+__all__ = [
+    "WeatherProfile",
+    "WeatherProvider",
+    "OpenWeatherProvider",
+    "MockWeatherProvider",
+]
