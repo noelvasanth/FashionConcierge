@@ -1,46 +1,28 @@
-"""Calendar provider abstractions and tools."""
+"""Deprecated calendar compatibility shim.
 
-from abc import ABC, abstractmethod
-from datetime import date
-from typing import Dict, Iterable, List
+Prefer importing from :mod:`tools.calendar_provider` instead. This module
+re-exports the validated provider interfaces to avoid breaking legacy
+imports while guiding callers toward the canonical path.
+"""
 
-from adk_app.genai_fallback import ensure_genai_imports
+from warnings import warn
 
-ensure_genai_imports()
+from tools.calendar_provider import (
+    CalendarEvent,
+    CalendarProvider,
+    GoogleCalendarProvider,
+    MockCalendarProvider,
+)
 
-from google.generativeai import agent as genai_agent
+warn(
+    "tools.calendar is deprecated; import from tools.calendar_provider instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-
-class CalendarProvider(ABC):
-    """Abstract calendar provider interface."""
-
-    @abstractmethod
-    def get_events(self, user_id: str, date_range: Iterable[date]) -> List[Dict[str, str]]:
-        """Fetch events for the user and date range."""
-
-    def as_tool(self) -> genai_agent.Tool:
-        """Wrap the provider in an ADK tool."""
-
-        return genai_agent.Tool(
-            name="get_calendar_events",
-            description="Fetch calendar events for the user and date range.",
-            func=self.get_events,
-        )
-
-
-class GoogleCalendarProvider(CalendarProvider):
-    """Placeholder Google Calendar provider."""
-
-    def __init__(self, project_id: str) -> None:
-        self.project_id = project_id
-
-    def get_events(self, user_id: str, date_range: Iterable[date]) -> List[Dict[str, str]]:
-        # Real implementation will call Google Calendar API.
-        return [
-            {
-                "user_id": user_id,
-                "date": next(iter(date_range)).isoformat(),
-                "summary": "Sample calendar event",
-                "type": "meeting",
-            }
-        ]
+__all__ = [
+    "CalendarEvent",
+    "CalendarProvider",
+    "GoogleCalendarProvider",
+    "MockCalendarProvider",
+]
