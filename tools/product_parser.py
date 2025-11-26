@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import logging
 from typing import Dict, List
 from urllib.parse import urljoin
 
@@ -13,6 +14,7 @@ from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
+from tools.observability import instrument_tool
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,7 @@ def _extract_text_candidates(soup: BeautifulSoup) -> List[str]:
     return [text for text in candidates if text]
 
 
+@instrument_tool("parse_product_html")
 def parse_product_html(html: str, url: str) -> Dict[str, object]:
     """Parse retailer HTML to extract raw product metadata.
 

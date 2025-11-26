@@ -22,8 +22,9 @@ from logic.outfit_scoring import calculate_color_harmony_metrics, score_outfit
 from models.mood_styles import MoodStyleProfile, get_mood_style
 from tools.wardrobe_tools import WardrobeTools
 from models.wardrobe_item import WardrobeItem
+from adk_app.logging_config import get_logger, log_event, operation_context
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OutfitStylistAgent:
@@ -68,69 +69,95 @@ class OutfitStylistAgent:
     ) -> Dict[str, object]:
         """Return ranked outfit metadata, collage specifications and rationale."""
 
-        logger.info("Stylist agent invoked for user=%s mood=%s", user_id, mood)
-        mood_profile = get_mood_style(mood)
-        all_items = self._coerce_items(self.wardrobe_tools.list_wardrobe_items(user_id))
-        if not schedule_profile:
-            schedule_profile = {"formality": "informal", "movement": "low", "day_parts": []}
-        if not weather_profile:
-            weather_profile = {"layers_required": "one", "rain_sensitivity": "dry", "temperature_range": "mild"}
-        if not daily_context:
-            daily_context = {
-                "formality_requirement": schedule_profile.get("formality", "informal"),
-                "movement_requirement": schedule_profile.get("movement", "low"),
-                "warmth_requirement": "medium",
-                "weather_risk_level": "low",
-                "special_constraints": constraints or [],
+        with operation_context("agent:stylist.recommend_outfit", user_id=user_id, mood=mood) as correlation_id:
+            log_event(
+                logger,
+                level=logging.INFO,
+                event="agent_call_started",
+                agent="stylist",
+                method="recommend_outfit",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                mood=mood,
+            )
+            mood_profile = get_mood_style(mood)
+            all_items = self._coerce_items(self.wardrobe_tools.list_wardrobe_items(user_id))
+            if not schedule_profile:
+                schedule_profile = {"formality": "informal", "movement": "low", "day_parts": []}
+            if not weather_profile:
+                weather_profile = {
+                    "layers_required": "one",
+                    "rain_sensitivity": "dry",
+                    "temperature_range": "mild",
+                }
+            if not daily_context:
+                daily_context = {
+                    "formality_requirement": schedule_profile.get("formality", "informal"),
+                    "movement_requirement": schedule_profile.get("movement", "low"),
+                    "warmth_requirement": "medium",
+                    "weather_risk_level": "low",
+                    "special_constraints": constraints or [],
+                }
+
+            filter_results = self._apply_filters(all_items, schedule_profile, weather_profile, mood_profile)
+            filtered_items = filter_results["items"]
+            if constraints:
+                filtered_items = [item for item in filtered_items if item.item_id not in set(constraints)]
+
+            candidate_outfits = self._generate_candidate_outfits(filtered_items, daily_context, mood_profile)
+            scored_outfits = self._score_and_rank(candidate_outfits, daily_context, mood_profile)
+            top_ranked = scored_outfits[: max(1, top_n)]
+
+            debug_summary = {
+                "filters": filter_results,
+                "candidate_outfits": len(candidate_outfits),
+                "ranked_outfits": [
+                    {
+                        "score": outfit["score"]["composite_score"],
+                        "ids": [item.item_id for item in outfit["items"]],
+                        "color_rule": outfit["color_harmony"]["rule_applied"],
+                    }
+                    for outfit in scored_outfits
+                ],
+                "daily_context": daily_context,
             }
 
-        filter_results = self._apply_filters(all_items, schedule_profile, weather_profile, mood_profile)
-        filtered_items = filter_results["items"]
-        if constraints:
-            filtered_items = [item for item in filtered_items if item.item_id not in set(constraints)]
-
-        candidate_outfits = self._generate_candidate_outfits(filtered_items, daily_context, mood_profile)
-        scored_outfits = self._score_and_rank(candidate_outfits, daily_context, mood_profile)
-        top_ranked = scored_outfits[: max(1, top_n)]
-
-        debug_summary = {
-            "filters": filter_results,
-            "candidate_outfits": len(candidate_outfits),
-            "ranked_outfits": [
-                {
-                    "score": outfit["score"]["composite_score"],
-                    "ids": [item.item_id for item in outfit["items"]],
-                    "color_rule": outfit["color_harmony"]["rule_applied"],
-                }
-                for outfit in scored_outfits
-            ],
-            "daily_context": daily_context,
-        }
-
-        user_facing_rationale = (
-            f"Generated {len(top_ranked)} {mood_profile.name} outfits using movement {daily_context.get('movement_requirement')} "
-            f"and formality {daily_context.get('formality_requirement')}."
-        )
-
-        response_outfits = []
-        for outfit in top_ranked:
-            collage = generate_collage_spec(outfit["items"], mood_profile)
-            response_outfits.append(
-                {
-                    "items": [item.__dict__ for item in outfit["items"]],
-                    "composite_score": outfit["score"]["composite_score"],
-                    "sub_scores": outfit["score"]["sub_scores"],
-                    "collage": collage.collage,
-                    "color_harmony": outfit["color_harmony"],
-                    "rationale": outfit["score"]["explanation"],
-                }
+            user_facing_rationale = (
+                f"Generated {len(top_ranked)} {mood_profile.name} outfits using movement {daily_context.get('movement_requirement')} "
+                f"and formality {daily_context.get('formality_requirement')}."
             )
 
-        return {
-            "ranked_outfits": response_outfits,
-            "user_facing_rationale": user_facing_rationale,
-            "debug_summary": debug_summary,
-        }
+            response_outfits = []
+            for outfit in top_ranked:
+                collage = generate_collage_spec(outfit["items"], mood_profile)
+                response_outfits.append(
+                    {
+                        "items": [item.__dict__ for item in outfit["items"]],
+                        "composite_score": outfit["score"]["composite_score"],
+                        "sub_scores": outfit["score"]["sub_scores"],
+                        "collage": collage.collage,
+                        "color_harmony": outfit["color_harmony"],
+                        "rationale": outfit["score"]["explanation"],
+                    }
+                )
+
+            response = {
+                "ranked_outfits": response_outfits,
+                "user_facing_rationale": user_facing_rationale,
+                "debug_summary": debug_summary,
+            }
+
+            log_event(
+                logger,
+                level=logging.INFO,
+                event="agent_call_completed",
+                agent="stylist",
+                method="recommend_outfit",
+                correlation_id=correlation_id,
+                outfit_count=len(response_outfits),
+                filters=filter_results.get("final_count"),
+            )
+            return response
 
     def _coerce_items(self, raw_items: List[Dict[str, object]]) -> List[WardrobeItem]:
         items: List[WardrobeItem] = []

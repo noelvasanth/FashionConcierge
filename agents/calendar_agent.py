@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime
 from typing import Dict, List, Tuple
 
@@ -12,11 +11,14 @@ ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
 
+import logging
+
 from adk_app.config import ADKConfig
+from adk_app.logging_config import get_logger, log_event, operation_context
 from tools.calendar_provider import CalendarEvent, CalendarProvider
 from memory.session_store import SessionManager
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 
 CATEGORY_KEYWORDS: Dict[str, Tuple[str, ...]] = {
@@ -104,63 +106,77 @@ class CalendarAgent:
     ) -> Dict[str, object]:
         """Fetch events and return schedule classification."""
 
-        end = end_date or target_date
-        events = self.provider.get_events(user_id=user_id, start_date=target_date, end_date=end)
-        categories: List[str] = []
-        day_parts: List[str] = []
-        safe_events: List[Dict[str, object]] = []
+        with operation_context("agent:calendar.get_schedule_profile", session_id=session_id) as correlation_id:
+            end = end_date or target_date
+            events = self.provider.get_events(user_id=user_id, start_date=target_date, end_date=end)
+            categories: List[str] = []
+            day_parts: List[str] = []
+            safe_events: List[Dict[str, object]] = []
 
-        for event in events:
-            category = self._classify_event(event)
-            categories.append(category)
-            day_parts.append(self._infer_day_part(event.start_time, category))
-            safe_events.append(
-                {
-                    "title": _sanitize_title(event.title),
-                    "start": event.start_time.isoformat(),
-                    "end": event.end_time.isoformat(),
-                    "category": category,
-                    "is_all_day": event.is_all_day,
-                }
+            for event in events:
+                category = self._classify_event(event)
+                categories.append(category)
+                day_parts.append(self._infer_day_part(event.start_time, category))
+                safe_events.append(
+                    {
+                        "title": _sanitize_title(event.title),
+                        "start": event.start_time.isoformat(),
+                        "end": event.end_time.isoformat(),
+                        "category": category,
+                        "is_all_day": event.is_all_day,
+                    }
+                )
+
+            formality = self._infer_formality(categories)
+            movement = self._infer_movement(categories)
+            debug_summary = {
+                "number_of_events": len(events),
+                "inferred_categories": categories,
+                "classification_rules": [
+                    "keyword mapping: meeting->business, social->smart casual, fitness/travel->movement high",
+                    "day parts by hour thresholds",
+                ],
+            }
+
+            user_facing_summary = (
+                f"Found {len(events)} events. "
+                f"Formality looks {formality}. Movement {movement}. Day parts: {', '.join(sorted(set(day_parts)))}."
             )
 
-        formality = self._infer_formality(categories)
-        movement = self._infer_movement(categories)
-        debug_summary = {
-            "number_of_events": len(events),
-            "inferred_categories": categories,
-            "classification_rules": [
-                "keyword mapping: meeting->business, social->smart casual, fitness/travel->movement high",
-                "day parts by hour thresholds",
-            ],
-        }
+            if self.session_manager and session_id:
+                self.session_manager.record_event(
+                    session_id,
+                    event_type="calendar_profile",
+                    payload={
+                        "date_range": {"start": target_date.isoformat(), "end": end.isoformat()},
+                        "user_facing_summary": user_facing_summary,
+                        "debug": debug_summary,
+                    },
+                )
 
-        user_facing_summary = (
-            f"Found {len(events)} events. "
-            f"Formality looks {formality}. Movement {movement}. Day parts: {', '.join(sorted(set(day_parts)))}."
-        )
+            response = {
+                "user_id": user_id,
+                "date_range": {"start": target_date.isoformat(), "end": end.isoformat()},
+                "events": safe_events,
+                "day_parts": sorted(set(day_parts)),
+                "formality": formality,
+                "movement": movement,
+                "user_facing_summary": user_facing_summary,
+                "debug_summary": debug_summary,
+            }
 
-        if self.session_manager and session_id:
-            self.session_manager.record_event(
-                session_id,
-                event_type="calendar_profile",
-                payload={
-                    "date_range": {"start": target_date.isoformat(), "end": end.isoformat()},
-                    "user_facing_summary": user_facing_summary,
-                    "debug": debug_summary,
-                },
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="agent_call_completed",
+                agent="calendar",
+                method="get_schedule_profile",
+                correlation_id=correlation_id,
+                request={"user_id": user_id, "date": target_date.isoformat()},
+                event_count=len(events),
+                formality=formality,
             )
-
-        return {
-            "user_id": user_id,
-            "date_range": {"start": target_date.isoformat(), "end": end.isoformat()},
-            "events": safe_events,
-            "day_parts": sorted(set(day_parts)),
-            "formality": formality,
-            "movement": movement,
-            "user_facing_summary": user_facing_summary,
-            "debug_summary": debug_summary,
-        }
+            return response
 
 
 __all__ = ["CalendarAgent"]

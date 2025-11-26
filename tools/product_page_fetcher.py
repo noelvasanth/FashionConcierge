@@ -13,6 +13,7 @@ from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
+from tools.observability import instrument_tool
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ def _validate_url(url: str) -> None:
         raise InvalidProductURLError(f"Unsupported or invalid URL: {url}")
 
 
+@instrument_tool("fetch_product_page")
 def fetch_product_page(url: str, timeout: Optional[float] = 10.0) -> str:
     """Fetch the raw HTML for a retailer product page.
 

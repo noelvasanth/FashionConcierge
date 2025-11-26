@@ -16,6 +16,7 @@ from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
+from tools.observability import instrument_tool
 
 
 LOGGER = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class WeatherProvider(ABC):
         return genai_agent.Tool(
             name="get_weather_forecast",
             description="Get weather forecast for a location and date.",
-            func=self.get_forecast,
+            func=instrument_tool("get_weather_forecast")(self.get_forecast),
         )
 
 

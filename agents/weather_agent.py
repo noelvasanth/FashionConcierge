@@ -13,11 +13,12 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from adk_app.logging_config import get_logger, log_event, operation_context
 from tools.weather_provider import WeatherProfile, WeatherProvider
 from memory.session_store import SessionManager
 
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 
 class WeatherAgent:
@@ -80,54 +81,69 @@ class WeatherAgent:
     ) -> Dict[str, object]:
         """Fetch forecast and return deterministic clothing labels."""
 
-        forecast = self.provider.get_forecast(location=location, date=target_date)
-        temp_range = self._temperature_range(forecast)
-        layers = self._layers_required(temp_range)
-        rain = self._rain_sensitivity(forecast.precipitation_probability)
-        debug_summary = {
-            "input_assumptions": {
+        with operation_context("agent:weather.get_weather_profile", session_id=session_id) as correlation_id:
+            forecast = self.provider.get_forecast(location=location, date=target_date)
+            temp_range = self._temperature_range(forecast)
+            layers = self._layers_required(temp_range)
+            rain = self._rain_sensitivity(forecast.precipitation_probability)
+            debug_summary = {
+                "input_assumptions": {
+                    "location": location,
+                    "date": target_date.isoformat(),
+                },
+                "thresholds": {
+                    "temperature_bands_c": {"cold": "<5", "cool": "<12", "mild": "<18", "warm": "<24", "hot": ">=24"},
+                    "rain_prob_thresholds": {"heavy": ">0.6", "light": ">0.3"},
+                },
+                "classification_rationale": {
+                    "temperature_range": temp_range,
+                    "layers_required": layers,
+                    "rain_sensitivity": rain,
+                },
+            }
+
+            user_facing_summary = (
+                f"Forecast {forecast.weather_condition} with {forecast.temp_min:.0f}-{forecast.temp_max:.0f}°C. "
+                f"Feels {temp_range}; layers {layers}; rain risk {rain}."
+            )
+
+            if self.session_manager and session_id:
+                self.session_manager.record_event(
+                    session_id,
+                    event_type="weather_profile",
+                    payload={
+                        "location": location,
+                        "date": target_date.isoformat(),
+                        "user_facing_summary": user_facing_summary,
+                        "debug": debug_summary,
+                    },
+                )
+
+            response = {
+                "user_id": user_id,
                 "location": location,
                 "date": target_date.isoformat(),
-            },
-            "thresholds": {
-                "temperature_bands_c": {"cold": "<5", "cool": "<12", "mild": "<18", "warm": "<24", "hot": ">=24"},
-                "rain_prob_thresholds": {"heavy": ">0.6", "light": ">0.3"},
-            },
-            "classification_rationale": {
+                "raw_forecast": forecast,
                 "temperature_range": temp_range,
                 "layers_required": layers,
                 "rain_sensitivity": rain,
-            },
-        }
+                "user_facing_summary": user_facing_summary,
+                "debug_summary": debug_summary,
+            }
 
-        user_facing_summary = (
-            f"Forecast {forecast.weather_condition} with {forecast.temp_min:.0f}-{forecast.temp_max:.0f}°C. "
-            f"Feels {temp_range}; layers {layers}; rain risk {rain}."
-        )
-
-        if self.session_manager and session_id:
-            self.session_manager.record_event(
-                session_id,
-                event_type="weather_profile",
-                payload={
-                    "location": location,
-                    "date": target_date.isoformat(),
-                    "user_facing_summary": user_facing_summary,
-                    "debug": debug_summary,
-                },
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="agent_call_completed",
+                agent="weather",
+                method="get_weather_profile",
+                correlation_id=correlation_id,
+                location=location,
+                date=target_date.isoformat(),
+                rain=rain,
+                temp_range=temp_range,
             )
-
-        return {
-            "user_id": user_id,
-            "location": location,
-            "date": target_date.isoformat(),
-            "raw_forecast": forecast,
-            "temperature_range": temp_range,
-            "layers_required": layers,
-            "rain_sensitivity": rain,
-            "user_facing_summary": user_facing_summary,
-            "debug_summary": debug_summary,
-        }
+            return response
 
 
 __all__ = ["WeatherAgent"]

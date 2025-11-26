@@ -8,6 +8,7 @@ from google import generativeai as genai
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from adk_app.logging_config import configure_logging
 from agents.orchestrator import OrchestratorAgent
 from agents.wardrobe_ingestion import WardrobeIngestionAgent
 from agents.wardrobe_query import WardrobeQueryAgent
@@ -32,6 +33,7 @@ class FashionConciergeApp:
 
     def __init__(self, config: ADKConfig | None = None) -> None:
         self.config = config or ADKConfig.from_env()
+        configure_logging()
         genai.configure(api_key=self.config.api_key)
 
         self.memory_service = UserMemoryService()
