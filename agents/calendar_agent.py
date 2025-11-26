@@ -14,6 +14,7 @@ from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
 from tools.calendar_provider import CalendarEvent, CalendarProvider
+from memory.session_store import SessionManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,9 +36,16 @@ def _sanitize_title(title: str) -> str:
 class CalendarAgent:
     """Classifies calendar events into a deterministic schedule profile."""
 
-    def __init__(self, config: ADKConfig, provider: CalendarProvider) -> None:
+    def __init__(
+        self,
+        config: ADKConfig,
+        provider: CalendarProvider,
+        session_manager: SessionManager | None = None,
+        context_tools: list | None = None,
+    ) -> None:
         self.config = config
         self.provider = provider
+        self.session_manager = session_manager
         self.system_instruction = (
             "Call the calendar tool, classify events into categories, and summarize the day."
         )
@@ -45,7 +53,7 @@ class CalendarAgent:
             model=self.config.model,
             system_instruction=self.system_instruction,
             name="calendar-agent",
-            tools=[provider.as_tool()],
+            tools=[provider.as_tool(), *(context_tools or [])],
         )
 
     @property
@@ -87,7 +95,13 @@ class CalendarAgent:
             return "medium"
         return "low"
 
-    def get_schedule_profile(self, user_id: str, target_date: date, end_date: date | None = None) -> Dict[str, object]:
+    def get_schedule_profile(
+        self,
+        user_id: str,
+        target_date: date,
+        end_date: date | None = None,
+        session_id: str | None = None,
+    ) -> Dict[str, object]:
         """Fetch events and return schedule classification."""
 
         end = end_date or target_date
@@ -125,6 +139,17 @@ class CalendarAgent:
             f"Found {len(events)} events. "
             f"Formality looks {formality}. Movement {movement}. Day parts: {', '.join(sorted(set(day_parts)))}."
         )
+
+        if self.session_manager and session_id:
+            self.session_manager.record_event(
+                session_id,
+                event_type="calendar_profile",
+                payload={
+                    "date_range": {"start": target_date.isoformat(), "end": end.isoformat()},
+                    "user_facing_summary": user_facing_summary,
+                    "debug": debug_summary,
+                },
+            )
 
         return {
             "user_id": user_id,

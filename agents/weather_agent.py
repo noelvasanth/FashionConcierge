@@ -14,6 +14,7 @@ from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
 from tools.weather_provider import WeatherProfile, WeatherProvider
+from memory.session_store import SessionManager
 
 
 LOGGER = logging.getLogger(__name__)
@@ -22,9 +23,16 @@ LOGGER = logging.getLogger(__name__)
 class WeatherAgent:
     """Fetches weather and classifies wardrobe-relevant signals."""
 
-    def __init__(self, config: ADKConfig, provider: WeatherProvider) -> None:
+    def __init__(
+        self,
+        config: ADKConfig,
+        provider: WeatherProvider,
+        session_manager: SessionManager | None = None,
+        context_tools: list | None = None,
+    ) -> None:
         self.config = config
         self.provider = provider
+        self.session_manager = session_manager
         self.system_instruction = (
             "Call the weather tool, translate forecasts into clothing needs, and explain thresholds."
         )
@@ -32,7 +40,7 @@ class WeatherAgent:
             model=self.config.model,
             system_instruction=self.system_instruction,
             name="weather-agent",
-            tools=[provider.as_tool()],
+            tools=[provider.as_tool(), *(context_tools or [])],
         )
 
     @property
@@ -67,7 +75,9 @@ class WeatherAgent:
             return "light rain"
         return "dry"
 
-    def get_weather_profile(self, user_id: str, location: str, target_date: date) -> Dict[str, object]:
+    def get_weather_profile(
+        self, user_id: str, location: str, target_date: date, session_id: str | None = None
+    ) -> Dict[str, object]:
         """Fetch forecast and return deterministic clothing labels."""
 
         forecast = self.provider.get_forecast(location=location, date=target_date)
@@ -94,6 +104,18 @@ class WeatherAgent:
             f"Forecast {forecast.weather_condition} with {forecast.temp_min:.0f}-{forecast.temp_max:.0f}°C. "
             f"Feels {temp_range}; layers {layers}; rain risk {rain}."
         )
+
+        if self.session_manager and session_id:
+            self.session_manager.record_event(
+                session_id,
+                event_type="weather_profile",
+                payload={
+                    "location": location,
+                    "date": target_date.isoformat(),
+                    "user_facing_summary": user_facing_summary,
+                    "debug": debug_summary,
+                },
+            )
 
         return {
             "user_id": user_id,

@@ -110,6 +110,7 @@ def test_agent_modules_export_expected_members(module_path: str, public_members:
         ("tools.wardrobe_store", ("WardrobeStore", "SQLiteWardrobeStore")),
         ("tools.rag", ("WardrobeRAG",)),
         ("tools.memory_tools", ("user_profile_tool",)),
+        ("tools.session_tools", ("session_toolkit",)),
     ],
 )
 def test_tool_modules_export_expected_members(module_path: str, public_members: Tuple[str, ...]) -> None:

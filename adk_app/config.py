@@ -21,6 +21,8 @@ class ADKConfig:
     model: str = DEFAULT_GEMINI_MODEL
     api_key: Optional[str] = None
     wardrobe_db_path: Optional[str] = None
+    session_store_backend: str = "json"
+    session_store_path: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> "ADKConfig":
@@ -35,4 +37,13 @@ class ADKConfig:
         location = os.getenv("LOCATION", "us-central1")
         model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
         api_key = os.getenv("GOOGLE_API_KEY")
-        return cls(project_id=project_id, location=location, model=model, api_key=api_key)
+        session_store_backend = os.getenv("SESSION_STORE_BACKEND", "json")
+        session_store_path = os.getenv("SESSION_STORE_PATH")
+        return cls(
+            project_id=project_id,
+            location=location,
+            model=model,
+            api_key=api_key,
+            session_store_backend=session_store_backend,
+            session_store_path=session_store_path,
+        )
