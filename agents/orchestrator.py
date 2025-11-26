@@ -12,10 +12,12 @@ from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
 from adk_app.logging_config import get_logger, log_event, operation_context
+from logic.safety import system_instruction
 from agents.calendar_agent import CalendarAgent
 from agents.outfit_stylist_agent import OutfitStylistAgent
 from agents.weather_agent import WeatherAgent
 from logic.context_synthesizer import synthesize_context
+from logic.validation import OutfitRequest, OutfitResponse, validation_failure
 from memory.session_store import SessionManager
 
 
@@ -46,10 +48,8 @@ class OrchestratorAgent:
         self.calendar_agent = calendar_agent
         self.weather_agent = weather_agent
         self.session_manager = session_manager
-        self.system_instruction = (
-            "You are the Fashion Concierge orchestrator. Receive user inputs, "
-            "plan the next steps across calendar, weather, wardrobe and stylist "
-            "agents, and compose a concise response."
+        self.system_instruction = system_instruction(
+            "orchestrator. Plan which agent or tool to call next, refusing actions outside scope."
         )
         self._llm_agent = self._build_llm_agent()
 
@@ -140,8 +140,26 @@ class OrchestratorAgent:
         with operation_context("agent:orchestrator.plan_outfit_context", session_id=session_id) as correlation_id:
             if not self.calendar_agent or not self.weather_agent:
                 return {"status": "error", "message": "Calendar or weather agent not configured."}
+            try:
+                request = OutfitRequest(
+                    user_id=user_id,
+                    date=target_date if isinstance(target_date, dt_date) else self._parse_date(str(target_date)),
+                    location=location,
+                    mood=mood,
+                )
+            except Exception as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="agent_request_invalid",
+                    agent="orchestrator",
+                    method="plan_outfit_context",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Invalid outfit context request", exc)
 
-            parsed_date = target_date if isinstance(target_date, dt_date) else self._parse_date(target_date)
+            parsed_date = request.date
             schedule_profile = self.calendar_agent.get_schedule_profile(
                 user_id=user_id, target_date=parsed_date, session_id=session_id
             )
@@ -160,11 +178,32 @@ class OrchestratorAgent:
             response = {
                 "status": "ok",
                 "agent": "orchestrator",
-                "request": {"user_id": user_id, "date": parsed_date.isoformat(), "location": location, "mood": mood},
+                "request": request.model_dump(),
                 "schedule_profile": schedule_profile,
                 "weather_profile": weather_profile,
                 "daily_context": daily_context,
             }
+            try:
+                OutfitResponse.model_validate(
+                    {
+                        "status": "ok",
+                        "request": request.model_dump(),
+                        "context": {"schedule": schedule_profile, "weather": weather_profile, "daily": daily_context},
+                        "top_outfits": [],
+                        "user_facing_summary": None,
+                    }
+                )
+            except Exception as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="agent_response_invalid",
+                    agent="orchestrator",
+                    method="plan_outfit_context",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Context response failed schema checks", exc)
             log_event(
                 LOGGER,
                 level=logging.INFO,
@@ -196,7 +235,26 @@ class OrchestratorAgent:
             if not all([self.calendar_agent, self.weather_agent, self.stylist_agent]):
                 return {"status": "error", "message": "Required agents not configured."}
 
-            parsed_date = date if isinstance(date, dt_date) else self._parse_date(str(date))  # type: ignore[arg-type]
+            try:
+                request = OutfitRequest(
+                    user_id=user_id,
+                    date=date if isinstance(date, dt_date) else self._parse_date(str(date)),
+                    location=location,
+                    mood=mood,
+                )
+            except Exception as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="agent_request_invalid",
+                    agent="orchestrator",
+                    method="plan_outfit",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Invalid outfit planning request", exc)
+
+            parsed_date = request.date
             schedule_profile = self.calendar_agent.get_schedule_profile(
                 user_id=user_id, target_date=parsed_date, session_id=session_id
             )
@@ -235,16 +293,25 @@ class OrchestratorAgent:
             response = {
                 "status": "ok",
                 "user_facing_summary": stylist_response.get("user_facing_rationale"),
-                "request": {
-                    "user_id": user_id,
-                    "date": parsed_date.isoformat(),
-                    "location": location,
-                    "mood": mood,
-                },
+                "request": request.model_dump(),
                 "top_outfits": stylist_response.get("ranked_outfits", []),
                 "context": daily_context,
                 "debug_summary": debug_summary,
             }
+
+            try:
+                OutfitResponse.model_validate(response)
+            except Exception as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="agent_response_invalid",
+                    agent="orchestrator",
+                    method="plan_outfit",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Orchestrator response failed schema checks", exc)
 
             log_event(
                 LOGGER,

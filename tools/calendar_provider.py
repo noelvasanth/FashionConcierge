@@ -17,6 +17,7 @@ from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
+from logic.validation import CalendarToolInput
 from tools.observability import instrument_tool
 
 
@@ -49,7 +50,11 @@ class CalendarProvider(ABC):
         return genai_agent.Tool(
             name="get_calendar_events",
             description="Fetch calendar events for a user and date range.",
-            func=instrument_tool("get_calendar_events")(self.get_events),
+            func=instrument_tool(
+                "get_calendar_events",
+                input_model=CalendarToolInput,
+                on_validation_error=lambda _exc: [],
+            )(self.get_events),
         )
 
 

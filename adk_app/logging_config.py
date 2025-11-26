@@ -9,6 +9,7 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import uuid
 from typing import Any, Dict, Iterator
 
@@ -36,6 +37,18 @@ _DEFAULT_EXCLUDE_KEYS = {
     "process",
     "message",
 }
+_DEFAULT_REDACT_KEYS = {
+    "user_id",
+    "email",
+    "location",
+    "events",
+    "wardrobe_items",
+    "image_url",
+    "source_url",
+    "description",
+    "summary",
+    "title",
+}
 
 _TRACING_MODULE: object | bool | None = None
 
@@ -58,7 +71,7 @@ class JsonFormatter(logging.Formatter):
         for key, value in record.__dict__.items():
             if key in _DEFAULT_EXCLUDE_KEYS or key in payload:
                 continue
-            payload[key] = value
+            payload[key] = redact_for_log(value)
         return json.dumps(payload)
 
 
@@ -70,6 +83,39 @@ def configure_logging(level: int | str | None = None) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     logging.basicConfig(level=desired_level, handlers=[handler])
+
+
+def _redact_string(value: str) -> str:
+    """Mask email-like or URL strings to avoid leaking PII into logs."""
+
+    email_pattern = re.compile(r"[\w.\-]+@[\w.\-]+")
+    if email_pattern.search(value):
+        return email_pattern.sub("[redacted-email]", value)
+    if value.lower().startswith("http"):
+        return "[redacted-url]"
+    return value
+
+
+def redact_for_log(payload: Any) -> Any:
+    """Recursively scrub likely PII or sensitive wardrobe/calendar details."""
+
+    if payload is None:
+        return None
+    if isinstance(payload, str):
+        return _redact_string(payload)
+    if isinstance(payload, (int, float, bool)):
+        return payload
+    if isinstance(payload, list):
+        return [redact_for_log(item) for item in payload]
+    if isinstance(payload, dict):
+        scrubbed: Dict[str, Any] = {}
+        for key, value in payload.items():
+            if key in _DEFAULT_REDACT_KEYS:
+                scrubbed[key] = "[redacted]"
+            else:
+                scrubbed[key] = redact_for_log(value)
+        return scrubbed
+    return str(payload)
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -154,7 +200,13 @@ def log_event(logger: logging.Logger, level: int, event: str, **fields: Any) -> 
 
     correlation_id = ensure_correlation_id(fields.pop("correlation_id", None))
     exc_info = fields.pop("exc_info", None)
-    logger.log(level, event, exc_info=exc_info, extra={"event": event, "correlation_id": correlation_id, **fields})
+    safe_fields = redact_for_log(fields)
+    logger.log(
+        level,
+        event,
+        exc_info=exc_info,
+        extra={"event": event, "correlation_id": correlation_id, **safe_fields},
+    )
 
 
 @contextlib.contextmanager
@@ -172,6 +224,7 @@ __all__ = [
     "ensure_correlation_id",
     "get_logger",
     "log_event",
+    "redact_for_log",
     "operation_context",
     "tracing_span",
 ]

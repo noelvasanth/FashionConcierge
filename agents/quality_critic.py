@@ -9,6 +9,7 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from logic.safety import system_instruction
 
 
 class QualityCriticAgent:
@@ -16,8 +17,8 @@ class QualityCriticAgent:
 
     def __init__(self, config: ADKConfig) -> None:
         self.config = config
-        self.system_instruction = (
-            "You review outfits, flag conflicts like weather mismatches and suggest refinements."
+        self.system_instruction = system_instruction(
+            "quality critic. Review outfits, flag conflicts, and avoid inventing wardrobe details beyond provided IDs."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,

@@ -16,6 +16,7 @@ from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
 from google.generativeai import agent as genai_agent
+from logic.validation import WeatherToolInput
 from tools.observability import instrument_tool
 
 
@@ -70,7 +71,18 @@ class WeatherProvider(ABC):
         return genai_agent.Tool(
             name="get_weather_forecast",
             description="Get weather forecast for a location and date.",
-            func=instrument_tool("get_weather_forecast")(self.get_forecast),
+            func=instrument_tool(
+                "get_weather_forecast",
+                input_model=WeatherToolInput,
+                on_validation_error=lambda _exc: WeatherProfile(
+                    temp_min=0.0,
+                    temp_max=0.0,
+                    precipitation_probability=0.0,
+                    wind_speed=0.0,
+                    weather_condition="unknown",
+                    clothing_guidance="validation failed",
+                ),
+            )(self.get_forecast),
         )
 
 

@@ -7,7 +7,15 @@ import time
 from functools import wraps
 from typing import Callable, ParamSpec, TypeVar
 
-from adk_app.logging_config import ensure_correlation_id, get_logger, log_event, tracing_span
+from pydantic import BaseModel, ValidationError
+
+from adk_app.logging_config import (
+    ensure_correlation_id,
+    get_logger,
+    log_event,
+    redact_for_log,
+    tracing_span,
+)
 
 LOGGER = get_logger(__name__)
 P = ParamSpec("P")
@@ -21,17 +29,39 @@ def _preview_kwargs(kwargs: dict, max_keys: int = 6) -> dict:
             preview["truncated"] = True
             break
         preview[key] = value
-    return preview
+    return redact_for_log(preview)
 
 
-def instrument_tool(tool_name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Wrap a callable to emit structured logs and optional trace spans."""
+def instrument_tool(
+    tool_name: str,
+    input_model: type[BaseModel] | None = None,
+    on_validation_error: Callable[[ValidationError], R] | None = None,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Wrap a callable to emit structured logs, validation, and optional trace spans."""
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             correlation_id = ensure_correlation_id()
             start = time.perf_counter()
+
+            if input_model:
+                try:
+                    validated = input_model.model_validate(kwargs)
+                    kwargs = validated.model_dump()
+                except ValidationError as exc:  # pragma: no cover - defensive path
+                    log_event(
+                        LOGGER,
+                        logging.WARNING,
+                        "tool_validation_failed",
+                        tool=tool_name,
+                        correlation_id=correlation_id,
+                        errors=redact_for_log(exc.errors()),
+                    )
+                    if on_validation_error:
+                        return on_validation_error(exc)
+                    raise
+
             log_event(
                 LOGGER,
                 logging.INFO,

@@ -9,6 +9,7 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from logic.safety import system_instruction
 
 
 class OutfitStylistAgent:
@@ -16,9 +17,8 @@ class OutfitStylistAgent:
 
     def __init__(self, config: ADKConfig) -> None:
         self.config = config
-        self.system_instruction = (
-            "You propose outfits that respect weather, occasion and mood. Return "
-            "structured outfit JSON with collage metadata."
+        self.system_instruction = system_instruction(
+            "stub stylist. Respect weather, occasion and mood. Return structured outfit JSON with collage metadata."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,
