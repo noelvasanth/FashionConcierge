@@ -20,6 +20,10 @@ class ADKConfig:
     location: str = "us-central1"
     model: str = DEFAULT_GEMINI_MODEL
     api_key: Optional[str] = None
+    google_credentials_path: Optional[str] = None
+    calendar_id: Optional[str] = None
+    weather_api_key: Optional[str] = None
+    default_location: Optional[str] = None
     wardrobe_db_path: Optional[str] = None
     session_store_backend: str = "json"
     session_store_path: Optional[str] = None
@@ -37,6 +41,10 @@ class ADKConfig:
         location = os.getenv("LOCATION", "us-central1")
         model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
         api_key = os.getenv("GOOGLE_API_KEY")
+        google_credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+        calendar_id = os.getenv("CALENDAR_ID")
+        weather_api_key = os.getenv("OPENWEATHER_API_KEY")
+        default_location = os.getenv("DEFAULT_LOCATION")
         session_store_backend = os.getenv("SESSION_STORE_BACKEND", "json")
         session_store_path = os.getenv("SESSION_STORE_PATH")
         return cls(
@@ -44,6 +52,10 @@ class ADKConfig:
             location=location,
             model=model,
             api_key=api_key,
+            google_credentials_path=google_credentials_path,
+            calendar_id=calendar_id,
+            weather_api_key=weather_api_key,
+            default_location=default_location,
             session_store_backend=session_store_backend,
             session_store_path=session_store_path,
         )

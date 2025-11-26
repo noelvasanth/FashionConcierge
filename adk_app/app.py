@@ -37,8 +37,12 @@ class FashionConciergeApp:
         self.memory_service = UserMemoryService()
         self.session_store = self._build_session_store()
         self.session_manager = SessionManager(store=self.session_store)
-        self.calendar_provider = GoogleCalendarProvider(project_id=self.config.project_id)
-        self.weather_provider = OpenWeatherProvider()
+        self.calendar_provider = GoogleCalendarProvider(
+            project_id=self.config.project_id,
+            calendar_id=self.config.calendar_id,
+            credentials_path=self.config.google_credentials_path,
+        )
+        self.weather_provider = OpenWeatherProvider(api_key=self.config.weather_api_key)
         self.wardrobe_store = SQLiteWardrobeStore(
             self.config.wardrobe_db_path or "data/wardrobe.db"
         )
