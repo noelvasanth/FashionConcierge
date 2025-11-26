@@ -39,7 +39,7 @@ POST to `/sessions` to open a session, then POST to `/orchestrate/outfit` with `
 ## Project layout
 
 - `adk_app/` – ADK App wiring, configuration defaults, and Gemini fallback helper.
-- `agents/` – Orchestrator plus domain-specific agents (ingestion, query, calendar, weather, stylist, critic).
+- `agents/` – Orchestrator plus domain-specific agents (ingestion, query, calendar, weather, stylist, critic). The canonical stylist lives in `outfit_stylist_agent.py`.
 - `tools/` – Provider abstractions and ADK tool wrappers (calendar, weather, wardrobe store, RAG, product parsing, memory).
 - `models/` – Dataclasses and canonical taxonomies for wardrobes, outfits, moods, and color theory.
 - `logic/` – Deterministic reasoning utilities for outfit filtering, building, scoring, and context synthesis.

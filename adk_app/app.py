@@ -59,6 +59,7 @@ class FashionConciergeApp:
         self.outfit_stylist = OutfitStylistAgent(
             config=self.config, wardrobe_tools=self.wardrobe_tools
         )
+        self._validate_stylist_agent()
         self.calendar_agent = CalendarAgent(
             config=self.config,
             provider=self.calendar_provider,
@@ -107,6 +108,16 @@ class FashionConciergeApp:
             app.register(tool)
 
         return app
+
+    def _validate_stylist_agent(self) -> None:
+        """Ensure the canonical stylist agent is wired in instead of the legacy stub."""
+
+        if self.outfit_stylist.__class__.__module__ == "agents.outfit_stylist":
+            msg = (
+                "The deprecated agents.outfit_stylist stub should not be registered. "
+                "Import OutfitStylistAgent from agents.outfit_stylist_agent instead."
+            )
+            raise RuntimeError(msg)
 
     def _build_session_store(self) -> SessionStore:
         if self.config.session_store_backend.lower() == "sqlite":
