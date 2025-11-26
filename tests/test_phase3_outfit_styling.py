@@ -15,6 +15,10 @@ from logic.outfit_builder import (
     build_outfit,
     generate_collage_spec,
     select_candidates_for_mood,
+    CandidateSelectionResult,
+    OutfitBuildResult,
+    HarmonyApplicationResult,
+    CollageSpecResult,
 )
 from models.color_theory import analogous_triplet, choose_harmonious_colors, complementary, monochrome
 from models.mood_styles import get_mood_style
@@ -98,8 +102,9 @@ def test_color_theory_rules():
     assert monochrome(["red", "Red"]) is True
     assert complementary("blue", "orange") is True
     assert analogous_triplet(["red", "orange", "yellow"]) is True
-    ranked = choose_harmonious_colors(["red", "green", "blue"], ["red", "gold"])
-    assert ranked[0] == "red"
+    harmony = choose_harmonious_colors(["red", "green", "blue"], ["red", "gold"])
+    assert harmony.chosen_colors[0] == "red"
+    assert harmony.rule_used in {"monochrome", "complementary", "analogous", "complementary-to-palette", "none"}
 
 
 def test_outfit_builder_flow(tmp_path):
@@ -108,20 +113,24 @@ def test_outfit_builder_flow(tmp_path):
     tools = WardrobeTools(store)
     _seed_items(store)
 
-    candidates = select_candidates_for_mood("demo", "festive", tools)
-    assert {item.category for item in candidates}.issuperset({"top", "bottom", "shoes"})
+    candidates: CandidateSelectionResult = select_candidates_for_mood("demo", "festive", tools)
+    assert {item.category for item in candidates.items}.issuperset({"top", "bottom", "shoes"})
+    assert candidates.diagnostics["initial_count"] == 5
 
     mood_profile = get_mood_style("festive")
-    outfit = build_outfit(candidates, mood_profile)
-    categories = [item.category for item in outfit]
+    outfit: OutfitBuildResult = build_outfit(candidates.items, mood_profile)
+    categories = [item.category for item in outfit.items]
     assert ["top", "bottom", "shoes"] == categories[:3]
+    assert outfit.diagnostics["combinations_scored"] >= 1
 
-    harmonised = apply_color_harmony(outfit, mood_profile)
-    assert all(item.category in categories for item in harmonised)
+    harmonised: HarmonyApplicationResult = apply_color_harmony(outfit.items, mood_profile)
+    assert all(item.category in categories for item in harmonised.items)
+    assert harmonised.diagnostics["chosen_colors"]
 
-    collage = generate_collage_spec(harmonised, mood_profile)
-    assert "background_color" in collage and collage["stickers"]
-    assert 0 <= collage["stickers"][0]["x"] <= 1
+    collage: CollageSpecResult = generate_collage_spec(harmonised.items, mood_profile)
+    assert "background_color" in collage.collage and collage.collage["stickers"]
+    assert 0 <= collage.collage["stickers"][0]["x"] <= 1
+    assert collage.diagnostics["layout"][0]["item_id"] == harmonised.items[0].item_id
 
 
 def test_outfit_stylist_agent_integration(tmp_path):
@@ -139,4 +148,7 @@ def test_outfit_stylist_agent_integration(tmp_path):
     assert {"top", "bottom", "shoes"}.issubset(categories)
     collage = response["collage"]
     assert collage["background_color"] == get_mood_style("festive").background_color
-    assert response["rationale"]
+    assert response["user_facing_rationale"]
+    debug_summary = response.get("debug_summary", {})
+    assert debug_summary.get("filtered_item_counts", {}).get("initial") == 5
+    assert debug_summary.get("color_harmony_rule_used")
