@@ -13,7 +13,7 @@ from agents.wardrobe_ingestion import WardrobeIngestionAgent
 from agents.wardrobe_query import WardrobeQueryAgent
 from agents.calendar_agent import CalendarAgent
 from agents.weather_agent import WeatherAgent
-from agents.outfit_stylist import OutfitStylistAgent
+from agents.outfit_stylist_agent import OutfitStylistAgent
 from agents.quality_critic import QualityCriticAgent
 from tools.calendar import GoogleCalendarProvider
 from tools.weather import OpenWeatherProvider
@@ -44,14 +44,16 @@ class FashionConciergeApp:
 
         all_ingestion_tools = self.wardrobe_tool_defs + self.ingestion_tool_defs
 
-        self.orchestrator = OrchestratorAgent(config=self.config, tools=all_ingestion_tools)
+        self.outfit_stylist = OutfitStylistAgent(config=self.config, wardrobe_tools=self.wardrobe_tools)
+        self.orchestrator = OrchestratorAgent(
+            config=self.config, tools=all_ingestion_tools, stylist_agent=self.outfit_stylist
+        )
         self.wardrobe_ingestion = WardrobeIngestionAgent(
             config=self.config, wardrobe_tools=self.wardrobe_tools, tools=all_ingestion_tools
         )
         self.wardrobe_query = WardrobeQueryAgent(config=self.config, tools=self.wardrobe_tool_defs)
         self.calendar_agent = CalendarAgent(config=self.config, provider=self.calendar_provider)
         self.weather_agent = WeatherAgent(config=self.config, provider=self.weather_provider)
-        self.outfit_stylist = OutfitStylistAgent(config=self.config)
         self.quality_critic = QualityCriticAgent(config=self.config)
 
         self.adk_app = self._build_adk_app()

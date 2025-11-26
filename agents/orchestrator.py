@@ -9,6 +9,7 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from agents.outfit_stylist_agent import OutfitStylistAgent
 
 
 class OrchestratorAgent:
@@ -20,9 +21,12 @@ class OrchestratorAgent:
     workflow.
     """
 
-    def __init__(self, config: ADKConfig, tools: list | None = None) -> None:
+    def __init__(
+        self, config: ADKConfig, tools: list | None = None, stylist_agent: OutfitStylistAgent | None = None
+    ) -> None:
         self.config = config
         self.tools = tools or []
+        self.stylist_agent = stylist_agent
         self.system_instruction = (
             "You are the Fashion Concierge orchestrator. Receive user inputs, "
             "plan the next steps across calendar, weather, wardrobe and stylist "
@@ -61,3 +65,11 @@ class OrchestratorAgent:
             "agent": "orchestrator",
             "message": "This is a scaffolded orchestrator. Expand sub-agent calls next.",
         }
+
+    def create_outfit(self, user_id: str, mood: str | None = None) -> Dict[str, Any]:
+        """Delegate outfit creation to the stylist agent when available."""
+
+        if not self.stylist_agent:
+            return {"status": "error", "message": "Stylist agent not configured."}
+        response = self.stylist_agent.recommend_outfit(user_id=user_id, mood=mood)
+        return {"status": "ok", "agent": "orchestrator", "outfit": response}
