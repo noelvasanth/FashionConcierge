@@ -19,6 +19,8 @@ from tools.calendar_provider import GoogleCalendarProvider
 from tools.weather_provider import OpenWeatherProvider
 from memory.user_profile import UserMemoryService
 from tools.memory_tools import user_profile_tool
+from memory.session_store import JSONSessionStore, SessionManager, SessionStore, SQLiteSessionStore
+from tools.session_tools import session_toolkit
 from tools.wardrobe_store import SQLiteWardrobeStore
 from tools.wardrobe_tools import WardrobeTools
 from tools.product_page_fetcher import fetch_product_page_tool
@@ -33,6 +35,8 @@ class FashionConciergeApp:
         genai.configure(api_key=self.config.api_key)
 
         self.memory_service = UserMemoryService()
+        self.session_store = self._build_session_store()
+        self.session_manager = SessionManager(store=self.session_store)
         self.calendar_provider = GoogleCalendarProvider(project_id=self.config.project_id)
         self.weather_provider = OpenWeatherProvider()
         self.wardrobe_store = SQLiteWardrobeStore(
@@ -41,18 +45,33 @@ class FashionConciergeApp:
         self.wardrobe_tools = WardrobeTools(self.wardrobe_store)
         self.wardrobe_tool_defs = self.wardrobe_tools.tool_defs()
         self.ingestion_tool_defs = [fetch_product_page_tool(), parse_product_html_tool()]
+        self.session_tool_defs = session_toolkit(self.session_manager)
+        self.memory_tool_defs = [user_profile_tool(self.memory_service)]
 
-        all_ingestion_tools = self.wardrobe_tool_defs + self.ingestion_tool_defs
+        all_ingestion_tools = self.wardrobe_tool_defs + self.ingestion_tool_defs + self.session_tool_defs
 
-        self.outfit_stylist = OutfitStylistAgent(config=self.config, wardrobe_tools=self.wardrobe_tools)
-        self.calendar_agent = CalendarAgent(config=self.config, provider=self.calendar_provider)
-        self.weather_agent = WeatherAgent(config=self.config, provider=self.weather_provider)
+        self.outfit_stylist = OutfitStylistAgent(
+            config=self.config, wardrobe_tools=self.wardrobe_tools
+        )
+        self.calendar_agent = CalendarAgent(
+            config=self.config,
+            provider=self.calendar_provider,
+            session_manager=self.session_manager,
+            context_tools=self.session_tool_defs + self.memory_tool_defs,
+        )
+        self.weather_agent = WeatherAgent(
+            config=self.config,
+            provider=self.weather_provider,
+            session_manager=self.session_manager,
+            context_tools=self.session_tool_defs + self.memory_tool_defs,
+        )
         self.orchestrator = OrchestratorAgent(
             config=self.config,
-            tools=all_ingestion_tools,
+            tools=all_ingestion_tools + self.memory_tool_defs,
             stylist_agent=self.outfit_stylist,
             calendar_agent=self.calendar_agent,
             weather_agent=self.weather_agent,
+            session_manager=self.session_manager,
         )
         self.wardrobe_ingestion = WardrobeIngestionAgent(
             config=self.config, wardrobe_tools=self.wardrobe_tools, tools=all_ingestion_tools
@@ -73,12 +92,25 @@ class FashionConciergeApp:
         app.register(self.weather_agent.adk_agent)
         app.register(self.outfit_stylist.adk_agent)
         app.register(self.quality_critic.adk_agent)
-        for tool in self.wardrobe_tool_defs + self.ingestion_tool_defs:
+        for tool in (
+            self.wardrobe_tool_defs
+            + self.ingestion_tool_defs
+            + self.session_tool_defs
+            + self.memory_tool_defs
+        ):
             app.register(tool)
 
-        # Attach memory tool to orchestrator for early personalization hooks.
-        app.register(user_profile_tool(self.memory_service))
         return app
+
+    def _build_session_store(self) -> SessionStore:
+        if self.config.session_store_backend.lower() == "sqlite":
+            return SQLiteSessionStore(self.config.session_store_path or "data/session_store.db")
+        return JSONSessionStore(self.config.session_store_path or "data/sessions")
+
+    def start_session(self, user_id: str, metadata: dict | None = None) -> str:
+        """Create a session and return its identifier for downstream calls."""
+
+        return self.session_manager.start_session(user_id=user_id, metadata=metadata)
 
     def send_test_message(self, message: str) -> str:
         """Send a test message through the orchestrator for local verification."""

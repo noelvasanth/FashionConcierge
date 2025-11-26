@@ -14,6 +14,7 @@ from agents.calendar_agent import CalendarAgent
 from agents.outfit_stylist_agent import OutfitStylistAgent
 from agents.weather_agent import WeatherAgent
 from logic.context_synthesizer import synthesize_context
+from memory.session_store import SessionManager
 
 
 class OrchestratorAgent:
@@ -32,12 +33,14 @@ class OrchestratorAgent:
         stylist_agent: OutfitStylistAgent | None = None,
         calendar_agent: CalendarAgent | None = None,
         weather_agent: WeatherAgent | None = None,
+        session_manager: SessionManager | None = None,
     ) -> None:
         self.config = config
         self.tools = tools or []
         self.stylist_agent = stylist_agent
         self.calendar_agent = calendar_agent
         self.weather_agent = weather_agent
+        self.session_manager = session_manager
         self.system_instruction = (
             "You are the Fashion Concierge orchestrator. Receive user inputs, "
             "plan the next steps across calendar, weather, wardrobe and stylist "
@@ -61,21 +64,28 @@ class OrchestratorAgent:
 
         return self._llm_agent
 
-    def handle_message(self, message: str) -> Dict[str, Any]:
+    def handle_message(self, message: str, session_id: str | None = None) -> Dict[str, Any]:
         """Provide a deterministic response for local smoke tests."""
 
+        if self.session_manager and session_id:
+            self.session_manager.record_turn(session_id, role="user", content=message)
+
         if message.lower().strip() == "hello from fashion concierge":
-            return {
+            response = {
                 "status": "ok",
                 "agent": "orchestrator",
                 "message": "Hello from Fashion Concierge! The orchestrator is online.",
             }
+        else:
+            response = {
+                "status": "unknown",
+                "agent": "orchestrator",
+                "message": "This is a scaffolded orchestrator. Expand sub-agent calls next.",
+            }
 
-        return {
-            "status": "unknown",
-            "agent": "orchestrator",
-            "message": "This is a scaffolded orchestrator. Expand sub-agent calls next.",
-        }
+        if self.session_manager and session_id:
+            self.session_manager.record_turn(session_id, role="assistant", content=response["message"])
+        return response
 
     def create_outfit(self, user_id: str, mood: str | None = None) -> Dict[str, Any]:
         """Delegate outfit creation to the stylist agent when available."""
@@ -85,18 +95,29 @@ class OrchestratorAgent:
         response = self.stylist_agent.recommend_outfit(user_id=user_id, mood=mood)
         return {"status": "ok", "agent": "orchestrator", "outfit": response}
 
-    def plan_outfit_context(self, user_id: str, target_date: str | dt_date, location: str, mood: str) -> Dict[str, Any]:
+    def plan_outfit_context(
+        self, user_id: str, target_date: str | dt_date, location: str, mood: str, session_id: str | None = None
+    ) -> Dict[str, Any]:
         """Gather calendar and weather context for the requested day."""
 
         if not self.calendar_agent or not self.weather_agent:
             return {"status": "error", "message": "Calendar or weather agent not configured."}
 
         parsed_date = target_date if isinstance(target_date, dt_date) else self._parse_date(target_date)
-        schedule_profile = self.calendar_agent.get_schedule_profile(user_id=user_id, target_date=parsed_date)
+        schedule_profile = self.calendar_agent.get_schedule_profile(
+            user_id=user_id, target_date=parsed_date, session_id=session_id
+        )
         weather_profile = self.weather_agent.get_weather_profile(
-            user_id=user_id, location=location, target_date=parsed_date
+            user_id=user_id, location=location, target_date=parsed_date, session_id=session_id
         )
         daily_context = synthesize_context(schedule_profile, weather_profile)
+
+        if self.session_manager and session_id:
+            self.session_manager.record_event(
+                session_id,
+                event_type="daily_context",
+                payload={"schedule": schedule_profile, "weather": weather_profile, "context": daily_context},
+            )
 
         return {
             "status": "ok",
@@ -113,15 +134,26 @@ class OrchestratorAgent:
         cleaned = raw_date.replace("/", "-").replace(" ", "-")
         return datetime.fromisoformat(cleaned).date()
 
-    def plan_outfit(self, user_id: str, date: str | dt_date, location: str, mood: str) -> Dict[str, Any]:
+    def plan_outfit(
+        self,
+        user_id: str,
+        date: str | dt_date,
+        location: str,
+        mood: str,
+        session_id: str | None = None,
+    ) -> Dict[str, Any]:
         """Full pipeline: calendar, weather, context, stylist ranking."""
 
         if not all([self.calendar_agent, self.weather_agent, self.stylist_agent]):
             return {"status": "error", "message": "Required agents not configured."}
 
         parsed_date = date if isinstance(date, dt_date) else self._parse_date(str(date))  # type: ignore[arg-type]
-        schedule_profile = self.calendar_agent.get_schedule_profile(user_id=user_id, target_date=parsed_date)
-        weather_profile = self.weather_agent.get_weather_profile(user_id=user_id, location=location, target_date=parsed_date)
+        schedule_profile = self.calendar_agent.get_schedule_profile(
+            user_id=user_id, target_date=parsed_date, session_id=session_id
+        )
+        weather_profile = self.weather_agent.get_weather_profile(
+            user_id=user_id, location=location, target_date=parsed_date, session_id=session_id
+        )
         daily_context = synthesize_context(schedule_profile, weather_profile)
         stylist_response = self.stylist_agent.recommend_outfit(
             user_id=user_id,
@@ -130,6 +162,19 @@ class OrchestratorAgent:
             weather_profile=weather_profile,
             daily_context=daily_context,
         )
+
+        if self.session_manager and session_id:
+            self.session_manager.record_event(
+                session_id,
+                event_type="outfit_plan",
+                payload={
+                    "request": {"user_id": user_id, "date": parsed_date.isoformat(), "location": location, "mood": mood},
+                    "schedule": schedule_profile,
+                    "weather": weather_profile,
+                    "context": daily_context,
+                    "stylist": stylist_response,
+                },
+            )
 
         debug_summary = {
             "schedule_profile": schedule_profile,
