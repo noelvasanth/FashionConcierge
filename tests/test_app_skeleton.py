@@ -105,8 +105,8 @@ def test_agent_modules_export_expected_members(module_path: str, public_members:
 @pytest.mark.parametrize(
     "module_path, public_members",
     [
-        ("tools.calendar", ("CalendarProvider", "GoogleCalendarProvider")),
-        ("tools.weather", ("WeatherProvider", "OpenWeatherProvider")),
+        ("tools.calendar_provider", ("CalendarProvider", "GoogleCalendarProvider")),
+        ("tools.weather_provider", ("WeatherProvider", "OpenWeatherProvider")),
         ("tools.wardrobe_store", ("WardrobeStore", "SQLiteWardrobeStore")),
         ("tools.rag", ("WardrobeRAG",)),
         ("tools.memory_tools", ("user_profile_tool",)),

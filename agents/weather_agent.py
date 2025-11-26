@@ -1,5 +1,8 @@
-"""Weather agent stub."""
+"""Weather agent that maps forecasts into clothing-friendly labels."""
 
+from __future__ import annotations
+
+import logging
 from datetime import date
 from typing import Dict
 
@@ -10,18 +13,20 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
-from tools.weather import WeatherProvider
+from tools.weather_provider import WeatherProfile, WeatherProvider
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class WeatherAgent:
-    """Wraps a weather provider and summarizes clothing guidance."""
+    """Fetches weather and classifies wardrobe-relevant signals."""
 
     def __init__(self, config: ADKConfig, provider: WeatherProvider) -> None:
         self.config = config
         self.provider = provider
         self.system_instruction = (
-            "You call the weather tool to fetch forecasts and return clothing guidance "
-            "including layers and rain readiness."
+            "Call the weather tool, translate forecasts into clothing needs, and explain thresholds."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,
@@ -34,13 +39,73 @@ class WeatherAgent:
     def adk_agent(self) -> genai_agent.LlmAgent:
         return self._llm_agent
 
-    def get_weather_profile(self, location: str, target_date: date) -> Dict[str, str]:
-        """Return a simple weather profile using the provider."""
+    def _temperature_range(self, profile: WeatherProfile) -> str:
+        avg_temp = (profile.temp_min + profile.temp_max) / 2
+        if avg_temp < 5:
+            return "cold"
+        if avg_temp < 12:
+            return "cool"
+        if avg_temp < 18:
+            return "mild"
+        if avg_temp < 24:
+            return "warm"
+        return "hot"
+
+    def _layers_required(self, temp_range: str) -> str:
+        return {
+            "cold": "two plus",
+            "cool": "two",
+            "mild": "one",
+            "warm": "zero",
+            "hot": "zero",
+        }[temp_range]
+
+    def _rain_sensitivity(self, precipitation_probability: float) -> str:
+        if precipitation_probability > 0.6:
+            return "heavy rain"
+        if precipitation_probability > 0.3:
+            return "light rain"
+        return "dry"
+
+    def get_weather_profile(self, user_id: str, location: str, target_date: date) -> Dict[str, object]:
+        """Fetch forecast and return deterministic clothing labels."""
 
         forecast = self.provider.get_forecast(location=location, date=target_date)
+        temp_range = self._temperature_range(forecast)
+        layers = self._layers_required(temp_range)
+        rain = self._rain_sensitivity(forecast.precipitation_probability)
+        debug_summary = {
+            "input_assumptions": {
+                "location": location,
+                "date": target_date.isoformat(),
+            },
+            "thresholds": {
+                "temperature_bands_c": {"cold": "<5", "cool": "<12", "mild": "<18", "warm": "<24", "hot": ">=24"},
+                "rain_prob_thresholds": {"heavy": ">0.6", "light": ">0.3"},
+            },
+            "classification_rationale": {
+                "temperature_range": temp_range,
+                "layers_required": layers,
+                "rain_sensitivity": rain,
+            },
+        }
+
+        user_facing_summary = (
+            f"Forecast {forecast.weather_condition} with {forecast.temp_min:.0f}-{forecast.temp_max:.0f}°C. "
+            f"Feels {temp_range}; layers {layers}; rain risk {rain}."
+        )
+
         return {
+            "user_id": user_id,
             "location": location,
             "date": target_date.isoformat(),
-            "forecast": forecast,
-            "profile": "mild-day",
+            "raw_forecast": forecast,
+            "temperature_range": temp_range,
+            "layers_required": layers,
+            "rain_sensitivity": rain,
+            "user_facing_summary": user_facing_summary,
+            "debug_summary": debug_summary,
         }
+
+
+__all__ = ["WeatherAgent"]
