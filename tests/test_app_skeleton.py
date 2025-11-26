@@ -90,7 +90,7 @@ def test_root_agent_responds_to_simple_message(stubbed_genai_config: None) -> No
         ("agents.wardrobe_query", ("WardrobeQueryAgent",)),
         ("agents.calendar_agent", ("CalendarAgent",)),
         ("agents.weather_agent", ("WeatherAgent",)),
-        ("agents.outfit_stylist", ("OutfitStylistAgent",)),
+        ("agents.outfit_stylist_agent", ("OutfitStylistAgent",)),
         ("agents.quality_critic", ("QualityCriticAgent",)),
     ],
 )

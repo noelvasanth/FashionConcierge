@@ -9,7 +9,7 @@ The agents package contains the orchestrator and domain-specialized agents used 
 - `wardrobe_query.py` – Retrieves wardrobe candidates via filtering and RAG search using event, weather, and mood context.
 - `calendar_agent.py` – Pulls events via the calendar provider, classifies them, and builds daily schedule profiles.
 - `weather_agent.py` – Fetches forecasts and derives clothing guidance (outer layers, rain-friendly footwear, etc.).
-- `outfit_stylist.py` and `outfit_stylist_agent.py` – Translate schedule, weather, mood, and wardrobe candidates into outfits; apply fashion and color rules.
+- `outfit_stylist_agent.py` – Translate schedule, weather, mood, and wardrobe candidates into outfits; apply fashion and color rules.
 - `quality_critic.py` – Optional reviewer that spots conflicts or repetition in proposed outfits.
 
 ## Usage notes
