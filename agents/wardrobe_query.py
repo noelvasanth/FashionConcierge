@@ -9,6 +9,7 @@ ensure_genai_imports()
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
+from logic.safety import system_instruction
 
 
 class WardrobeQueryAgent:
@@ -17,9 +18,8 @@ class WardrobeQueryAgent:
     def __init__(self, config: ADKConfig, tools: list | None = None) -> None:
         self.config = config
         self.tools = tools or []
-        self.system_instruction = (
-            "You query the wardrobe store, apply filters for season, mood and "
-            "formality, and return candidate items for outfit building."
+        self.system_instruction = system_instruction(
+            "wardrobe query agent. Use registered wardrobe tools, apply filters, and keep wardrobe URLs redacted."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,

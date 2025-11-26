@@ -46,6 +46,13 @@ The CLI prints a deterministic orchestrator response to confirm the ADK App, age
 - **Deterministic helpers**: Local parsing, taxonomy, and filtering logic enforce safety and reproducibility.
 - **Observability**: Favor explicit logging and traceability for agent and tool calls.
 
+## Privacy and data handling
+
+- **Per-user isolation**: Wardrobe items, sessions, and profiles are stored under `data/` using user-specific keys. JSON session stores keep one file per session, while SQLite stores enforce user_id columns to separate tenants.
+- **Controlled access**: Agents call providers through validated ADK tools (calendar, weather, wardrobe). Tool decorators validate payloads and reject malformed or cross-user requests before execution.
+- **PII-safe logging**: Structured logging applies automatic redaction of user identifiers, URLs, and calendar or wardrobe details. Logs default to summaries and avoid emitting raw event titles, locations, or source links.
+- **Fail-safe validation**: Pydantic schemas guard agent inputs/outputs and tool payloads. Schema violations surface `needs_review` responses so a human can triage instead of silently proceeding with questionable data.
+
 ## Working on the codebase
 
 - Start at `adk_app/app.py` to see how the App registers agents and tools.

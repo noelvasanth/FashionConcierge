@@ -14,6 +14,7 @@ from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
 from adk_app.logging_config import get_logger, log_event, operation_context
+from logic.safety import system_instruction
 from tools.weather_provider import WeatherProfile, WeatherProvider
 from memory.session_store import SessionManager
 
@@ -34,8 +35,8 @@ class WeatherAgent:
         self.config = config
         self.provider = provider
         self.session_manager = session_manager
-        self.system_instruction = (
-            "Call the weather tool, translate forecasts into clothing needs, and explain thresholds."
+        self.system_instruction = system_instruction(
+            "weather agent. Call the weather tool, translate forecasts into clothing needs, and explain thresholds."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,

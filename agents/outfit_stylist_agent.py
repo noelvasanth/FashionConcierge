@@ -19,6 +19,7 @@ from logic.contextual_filtering import (
 )
 from logic.outfit_builder import generate_collage_spec
 from logic.outfit_scoring import calculate_color_harmony_metrics, score_outfit
+from logic.safety import system_instruction
 from models.mood_styles import MoodStyleProfile, get_mood_style
 from tools.wardrobe_tools import WardrobeTools
 from models.wardrobe_item import WardrobeItem
@@ -33,9 +34,8 @@ class OutfitStylistAgent:
     def __init__(self, config: ADKConfig, wardrobe_tools: WardrobeTools) -> None:
         self.config = config
         self.wardrobe_tools = wardrobe_tools
-        self.system_instruction = (
-            "You propose outfits that respect mood and color harmony. Use the provided "
-            "tools for wardrobe access and return structured outfit JSON with a collage spec."
+        self.system_instruction = system_instruction(
+            "outfit stylist. Respect mood and color harmony, call wardrobe tools safely, and return structured JSON only."
         )
         self._llm_agent = self._build_llm_agent()
 

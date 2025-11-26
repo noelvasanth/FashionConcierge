@@ -15,6 +15,7 @@ import logging
 
 from adk_app.config import ADKConfig
 from adk_app.logging_config import get_logger, log_event, operation_context
+from logic.safety import system_instruction
 from models.ingestion_mapping import map_raw_metadata_to_wardrobe_item
 from tools.product_page_fetcher import fetch_product_page
 from tools.product_parser import parse_product_html
@@ -36,9 +37,8 @@ class WardrobeIngestionAgent:
         self.wardrobe_tools = wardrobe_tools
         ingestion_tools = tools or []
         self.tools = ingestion_tools
-        self.system_instruction = (
-            "You ingest retailer product pages, extract fashion metadata and store"
-            " wardrobe items."
+        self.system_instruction = system_instruction(
+            "wardrobe ingestion agent. Only ingest approved retailer URLs, sanitize outputs, and avoid storing PII."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,

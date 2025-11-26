@@ -15,6 +15,7 @@ import logging
 
 from adk_app.config import ADKConfig
 from adk_app.logging_config import get_logger, log_event, operation_context
+from logic.safety import system_instruction
 from tools.calendar_provider import CalendarEvent, CalendarProvider
 from memory.session_store import SessionManager
 
@@ -48,8 +49,8 @@ class CalendarAgent:
         self.config = config
         self.provider = provider
         self.session_manager = session_manager
-        self.system_instruction = (
-            "Call the calendar tool, classify events into categories, and summarize the day."
+        self.system_instruction = system_instruction(
+            "calendar agent. Call the calendar tool, classify events, and only surface redacted summaries."
         )
         self._llm_agent = genai_agent.LlmAgent(
             model=self.config.model,
