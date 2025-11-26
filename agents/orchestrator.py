@@ -1,6 +1,6 @@
 """Root orchestrator agent wiring for Fashion Concierge."""
 
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from typing import Any, Dict
 
 from adk_app.genai_fallback import ensure_genai_imports
@@ -85,13 +85,13 @@ class OrchestratorAgent:
         response = self.stylist_agent.recommend_outfit(user_id=user_id, mood=mood)
         return {"status": "ok", "agent": "orchestrator", "outfit": response}
 
-    def plan_outfit_context(self, user_id: str, target_date: str | date, location: str, mood: str) -> Dict[str, Any]:
+    def plan_outfit_context(self, user_id: str, target_date: str | dt_date, location: str, mood: str) -> Dict[str, Any]:
         """Gather calendar and weather context for the requested day."""
 
         if not self.calendar_agent or not self.weather_agent:
             return {"status": "error", "message": "Calendar or weather agent not configured."}
 
-        parsed_date = target_date if isinstance(target_date, date) else self._parse_date(target_date)
+        parsed_date = target_date if isinstance(target_date, dt_date) else self._parse_date(target_date)
         schedule_profile = self.calendar_agent.get_schedule_profile(user_id=user_id, target_date=parsed_date)
         weather_profile = self.weather_agent.get_weather_profile(
             user_id=user_id, location=location, target_date=parsed_date
@@ -107,8 +107,47 @@ class OrchestratorAgent:
             "daily_context": daily_context,
         }
 
-    def _parse_date(self, raw_date: str) -> date:
+    def _parse_date(self, raw_date: str) -> dt_date:
         """Parse dates flexibly for user facing requests."""
 
         cleaned = raw_date.replace("/", "-").replace(" ", "-")
         return datetime.fromisoformat(cleaned).date()
+
+    def plan_outfit(self, user_id: str, date: str | dt_date, location: str, mood: str) -> Dict[str, Any]:
+        """Full pipeline: calendar, weather, context, stylist ranking."""
+
+        if not all([self.calendar_agent, self.weather_agent, self.stylist_agent]):
+            return {"status": "error", "message": "Required agents not configured."}
+
+        parsed_date = date if isinstance(date, dt_date) else self._parse_date(str(date))  # type: ignore[arg-type]
+        schedule_profile = self.calendar_agent.get_schedule_profile(user_id=user_id, target_date=parsed_date)
+        weather_profile = self.weather_agent.get_weather_profile(user_id=user_id, location=location, target_date=parsed_date)
+        daily_context = synthesize_context(schedule_profile, weather_profile)
+        stylist_response = self.stylist_agent.recommend_outfit(
+            user_id=user_id,
+            mood=mood,
+            schedule_profile=schedule_profile,
+            weather_profile=weather_profile,
+            daily_context=daily_context,
+        )
+
+        debug_summary = {
+            "schedule_profile": schedule_profile,
+            "weather_profile": weather_profile,
+            "context": daily_context,
+            "stylist_debug": stylist_response.get("debug_summary"),
+        }
+
+        return {
+            "status": "ok",
+            "user_facing_summary": stylist_response.get("user_facing_rationale"),
+            "request": {
+                "user_id": user_id,
+                "date": parsed_date.isoformat(),
+                "location": location,
+                "mood": mood,
+            },
+            "top_outfits": stylist_response.get("ranked_outfits", []),
+            "context": daily_context,
+            "debug_summary": debug_summary,
+        }
