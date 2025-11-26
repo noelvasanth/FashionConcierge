@@ -26,6 +26,16 @@ python main.py
 
 The CLI prints a deterministic orchestrator response to confirm the ADK App, agents, and tools load correctly.
 
+### Lightweight API server
+
+Run the FastAPI deployment surface locally to mirror the Cloud Run entrypoint:
+
+```bash
+APP_ENV=staging uvicorn server.api:app --host 0.0.0.0 --port 8080
+```
+
+POST to `/sessions` to open a session, then POST to `/orchestrate/outfit` with `user_id`, `date`, `location`, and `mood` to receive ranked outfits.
+
 ## Project layout
 
 - `adk_app/` – ADK App wiring, configuration defaults, and Gemini fallback helper.

@@ -1,0 +1,9 @@
+project_id: fashion-concierge-prod
+location: us-central1
+model: models/gemini-1.5-pro-002
+wardrobe_db_path: /var/lib/fashion-concierge/wardrobe.db
+session_store_backend: sqlite
+session_store_path: /var/lib/fashion-concierge/session-store.db
+default_location: "San Francisco, CA"
+# Secrets are expected to be injected via environment variables or Secret Manager.
+calendar_id: "primary"

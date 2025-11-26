@@ -1,23 +1,32 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: [work]
+    branches: [main, work]
+  pull_request:
+    branches: [main, work]
 
 jobs:
-  tests:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[test]
+          pip install .[test]
       - name: Run tests
-        run: |
-          pytest
+        run: pytest
+      - name: Run evaluation suite smoke check
+        run: python - <<'PY'
+import json
+from evaluation.harness import run_evaluation_suite
+results = run_evaluation_suite()
+print(json.dumps(results, indent=2))
+if not all(r.get("passed") for r in results):
+    raise SystemExit("One or more evaluation scenarios failed")
+PY
