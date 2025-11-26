@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.egg-info
+.env
+.venv
+.git
+.gitignore
+.cache
+.pytest_cache
+.ipynb_checkpoints
+data

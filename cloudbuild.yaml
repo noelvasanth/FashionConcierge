@@ -1,0 +1,35 @@
+substitutions:
+  _SERVICE: fashion-concierge
+  _REGION: us-central1
+options:
+  substitutionOption: ALLOW_LOOSE
+steps:
+  - name: python:3.11
+    id: "tests"
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        pip install --no-cache-dir --upgrade pip
+        pip install --no-cache-dir .[test]
+        pytest
+  - name: gcr.io/cloud-builders/docker
+    id: "build"
+    args:
+      ["build", "-t", "gcr.io/$PROJECT_ID/fashion-concierge:$SHORT_SHA", "-t", "gcr.io/$PROJECT_ID/fashion-concierge:latest", "."]
+  - name: gcr.io/cloud-builders/gcloud
+    id: "deploy"
+    args:
+      [
+        "run",
+        "deploy",
+        "$_SERVICE",
+        "--image",
+        "gcr.io/$PROJECT_ID/fashion-concierge:$SHORT_SHA",
+        "--region",
+        "$_REGION",
+        "--allow-unauthenticated",
+      ]
+images:
+  - gcr.io/$PROJECT_ID/fashion-concierge:$SHORT_SHA
+  - gcr.io/$PROJECT_ID/fashion-concierge:latest

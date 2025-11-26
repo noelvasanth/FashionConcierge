@@ -1,0 +1,32 @@
+# Template configuration for deploying the orchestrator behind Vertex Agent Engine.
+# Replace the placeholders below and deploy with:
+# gcloud beta agent builder agent-engines create --config deploy/vertex-agent-engine.yaml
+engineId: fashion-concierge-engine
+displayName: Fashion Concierge Engine
+location: us-central1
+projectId: ${PROJECT_ID}
+cloudRun:
+  uri: https://${CLOUD_RUN_HOST}
+  serviceAccount: fashion-concierge@${PROJECT_ID}.iam.gserviceaccount.com
+environment:
+  variables:
+    APP_ENV: production
+    PROJECT_ID: ${PROJECT_ID}
+    LOCATION: us-central1
+    GEMINI_MODEL: models/gemini-1.5-pro-002
+  secrets:
+    - key: GOOGLE_API_KEY
+      secretVersion: projects/${PROJECT_ID}/secrets/google-api-key/versions/latest
+    - key: OPENWEATHER_API_KEY
+      secretVersion: projects/${PROJECT_ID}/secrets/openweather-api-key/versions/latest
+    - key: GOOGLE_CREDENTIALS_PATH
+      secretVersion: projects/${PROJECT_ID}/secrets/google-application-credentials/versions/latest
+routing:
+  # Route agent engine calls to the FastAPI orchestrator entrypoints.
+  endpoints:
+    - name: planOutfit
+      uri: https://${CLOUD_RUN_HOST}/orchestrate/outfit
+      method: POST
+    - name: planContext
+      uri: https://${CLOUD_RUN_HOST}/orchestrate/context
+      method: POST

@@ -1,0 +1,55 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: fashion-concierge
+  namespace: ${PROJECT_ID}
+  annotations:
+    run.googleapis.com/launch-stage: GA
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      serviceAccountName: fashion-concierge@${PROJECT_ID}.iam.gserviceaccount.com
+      containers:
+        - image: gcr.io/${PROJECT_ID}/fashion-concierge:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_ENV
+              value: production
+            - name: PROJECT_ID
+              value: ${PROJECT_ID}
+            - name: LOCATION
+              value: us-central1
+            - name: GEMINI_MODEL
+              value: models/gemini-1.5-pro-002
+            - name: CALENDAR_ID
+              value: primary
+            - name: DEFAULT_LOCATION
+              value: "San Francisco, CA"
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: google-api-key
+                  key: latest
+            - name: OPENWEATHER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openweather-api-key
+                  key: latest
+            - name: GOOGLE_CREDENTIALS_PATH
+              value: /var/secrets/google/credentials.json
+          volumeMounts:
+            - name: google-credentials
+              mountPath: /var/secrets/google
+      volumes:
+        - name: google-credentials
+          secret:
+            secretName: google-application-credentials
+            items:
+              - key: latest
+                path: credentials.json

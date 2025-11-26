@@ -1,0 +1,9 @@
+project_id: fashion-concierge-staging
+location: us-central1
+model: models/gemini-1.5-flash-002
+wardrobe_db_path: data/wardrobe-staging.db
+session_store_backend: sqlite
+session_store_path: data/session-store-staging.db
+default_location: "New York, NY"
+# Secrets are expected to be injected via environment variables or Secret Manager.
+calendar_id: "primary"
