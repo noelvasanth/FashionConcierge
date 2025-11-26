@@ -142,13 +142,13 @@ def test_outfit_stylist_agent_integration(tmp_path):
     config = ADKConfig.from_env()
     agent = OutfitStylistAgent(config=config, wardrobe_tools=tools)
 
-    response = agent.recommend_outfit(user_id="agent_user", mood="festive")
-    assert "items" in response and response["items"]
-    categories = {item["category"] for item in response["items"]}
+    response = agent.recommend_outfit(user_id="agent_user", mood="festive", top_n=1)
+    assert response["ranked_outfits"]
+    first = response["ranked_outfits"][0]
+    categories = {item["category"] for item in first["items"]}
     assert {"top", "bottom", "shoes"}.issubset(categories)
-    collage = response["collage"]
+    collage = first["collage"]
     assert collage["background_color"] == get_mood_style("festive").background_color
     assert response["user_facing_rationale"]
     debug_summary = response.get("debug_summary", {})
-    assert debug_summary.get("filtered_item_counts", {}).get("initial") == 5
-    assert debug_summary.get("color_harmony_rule_used")
+    assert debug_summary.get("candidate_outfits") >= 1
