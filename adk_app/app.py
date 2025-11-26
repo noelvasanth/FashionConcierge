@@ -21,6 +21,8 @@ from memory.user_profile import UserMemoryService
 from tools.memory_tools import user_profile_tool
 from tools.wardrobe_store import SQLiteWardrobeStore
 from tools.wardrobe_tools import WardrobeTools
+from tools.product_page_fetcher import fetch_product_page_tool
+from tools.product_parser import parse_product_html_tool
 
 
 class FashionConciergeApp:
@@ -38,9 +40,14 @@ class FashionConciergeApp:
         )
         self.wardrobe_tools = WardrobeTools(self.wardrobe_store)
         self.wardrobe_tool_defs = self.wardrobe_tools.tool_defs()
+        self.ingestion_tool_defs = [fetch_product_page_tool(), parse_product_html_tool()]
 
-        self.orchestrator = OrchestratorAgent(config=self.config, tools=self.wardrobe_tool_defs)
-        self.wardrobe_ingestion = WardrobeIngestionAgent(config=self.config, tools=self.wardrobe_tool_defs)
+        all_ingestion_tools = self.wardrobe_tool_defs + self.ingestion_tool_defs
+
+        self.orchestrator = OrchestratorAgent(config=self.config, tools=all_ingestion_tools)
+        self.wardrobe_ingestion = WardrobeIngestionAgent(
+            config=self.config, wardrobe_tools=self.wardrobe_tools, tools=all_ingestion_tools
+        )
         self.wardrobe_query = WardrobeQueryAgent(config=self.config, tools=self.wardrobe_tool_defs)
         self.calendar_agent = CalendarAgent(config=self.config, provider=self.calendar_provider)
         self.weather_agent = WeatherAgent(config=self.config, provider=self.weather_provider)
@@ -60,7 +67,7 @@ class FashionConciergeApp:
         app.register(self.weather_agent.adk_agent)
         app.register(self.outfit_stylist.adk_agent)
         app.register(self.quality_critic.adk_agent)
-        for tool in self.wardrobe_tool_defs:
+        for tool in self.wardrobe_tool_defs + self.ingestion_tool_defs:
             app.register(tool)
 
         # Attach memory tool to orchestrator for early personalization hooks.

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from adk_app.genai_fallback import ensure_genai_imports
 ensure_genai_imports()
 
-# from google.generativeai import agent as genai_agent
+from google.generativeai import agent as genai_agent
 
 from models.wardrobe_item import WardrobeItem, from_raw_metadata
 from tools.wardrobe_store import SQLiteWardrobeStore, WardrobeStore
