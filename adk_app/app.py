@@ -1,5 +1,8 @@
 """ADK app bootstrap."""
 
+from datetime import date as dt_date
+import logging
+
 from adk_app.genai_fallback import ensure_genai_imports
 
 ensure_genai_imports()
@@ -8,7 +11,8 @@ from google import generativeai as genai
 from google.generativeai import agent as genai_agent
 
 from adk_app.config import ADKConfig
-from adk_app.logging_config import configure_logging
+from adk_app.logging_config import configure_logging, get_logger, log_event, operation_context
+from pydantic import ValidationError
 from agents.orchestrator import OrchestratorAgent
 from agents.wardrobe_ingestion import WardrobeIngestionAgent
 from agents.wardrobe_query import WardrobeQueryAgent
@@ -26,6 +30,10 @@ from tools.wardrobe_store import SQLiteWardrobeStore
 from tools.wardrobe_tools import WardrobeTools
 from tools.product_page_fetcher import fetch_product_page_tool
 from tools.product_parser import parse_product_html_tool
+from logic.validation import OutfitRequest, OutfitResponse, validation_failure
+
+
+LOGGER = get_logger(__name__)
 
 
 class FashionConciergeApp:
@@ -128,6 +136,135 @@ class FashionConciergeApp:
         """Create a session and return its identifier for downstream calls."""
 
         return self.session_manager.start_session(user_id=user_id, metadata=metadata)
+
+    def orchestrate_outfit(
+        self,
+        *,
+        user_id: str,
+        location: str,
+        date: str | dt_date,
+        mood: str,
+        session_id: str | None = None,
+    ) -> dict:
+        """Session-aware outfit orchestration entry point.
+
+        This method delegates to the orchestrator for calendar/weather context and
+        then calls the deterministic stylist agent to build outfits.
+        """
+
+        with operation_context("app:orchestrate_outfit", session_id=session_id) as correlation_id:
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="app_call_started",
+                agent="app",
+                method="orchestrate_outfit",
+                session_id=session_id,
+                user_id=user_id,
+                mood=mood,
+                location=location,
+            )
+
+            context_result = self.orchestrator.plan_outfit_context(
+                user_id=user_id,
+                target_date=date,
+                location=location,
+                mood=mood,
+                session_id=session_id,
+            )
+            if context_result.get("status") != "ok":
+                return context_result
+
+            try:
+                request = OutfitRequest.model_validate(context_result.get("request", {}))
+            except ValidationError as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="app_request_invalid",
+                    agent="app",
+                    method="orchestrate_outfit",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Invalid outfit request payload", exc)
+
+            stylist_response = self.outfit_stylist.recommend_outfit(
+                user_id=user_id,
+                mood=mood,
+                schedule_profile=context_result.get("schedule_profile"),
+                weather_profile=context_result.get("weather_profile"),
+                daily_context=context_result.get("daily_context"),
+            )
+
+            response = {
+                "status": "ok",
+                "request": request,
+                "top_outfits": stylist_response.get("ranked_outfits", []),
+                "user_facing_summary": stylist_response.get("user_facing_rationale"),
+                "context": {
+                    "schedule": context_result.get("schedule_profile"),
+                    "weather": context_result.get("weather_profile"),
+                    "daily": context_result.get("daily_context"),
+                },
+                "debug_summary": {
+                    "context": context_result.get("daily_context"),
+                    "stylist_debug": stylist_response.get("debug_summary"),
+                },
+            }
+
+            try:
+                OutfitResponse.model_validate(response)
+            except ValidationError as exc:
+                log_event(
+                    LOGGER,
+                    level=logging.WARNING,
+                    event="app_response_invalid",
+                    agent="app",
+                    method="orchestrate_outfit",
+                    details=str(exc),
+                    correlation_id=correlation_id,
+                )
+                return validation_failure("Outfit response failed schema checks", exc)
+
+            if self.session_manager and session_id:
+                self.session_manager.record_event(
+                    session_id,
+                    event_type="outfit_plan",
+                    payload=response,
+                )
+
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="app_call_completed",
+                agent="app",
+                method="orchestrate_outfit",
+                session_id=session_id,
+                correlation_id=correlation_id,
+                outfit_count=len(response["top_outfits"]),
+            )
+
+            return response
+
+    def plan_outfit(
+        self,
+        *,
+        user_id: str,
+        location: str,
+        date: str | dt_date,
+        mood: str,
+        session_id: str | None = None,
+    ) -> dict:
+        """Alias for orchestrate_outfit to match expected notebook calls."""
+
+        return self.orchestrate_outfit(
+            user_id=user_id,
+            location=location,
+            date=date,
+            mood=mood,
+            session_id=session_id,
+        )
 
     def send_test_message(self, message: str) -> str:
         """Send a test message through the orchestrator for local verification."""
