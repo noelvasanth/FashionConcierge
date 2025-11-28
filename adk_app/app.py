@@ -23,7 +23,7 @@ from agents.quality_critic import QualityCriticAgent
 from tools.calendar_provider import GoogleCalendarProvider
 from tools.weather_provider import OpenWeatherProvider
 from memory.user_profile import UserMemoryService
-from tools.memory_tools import user_profile_tool
+from tools.memory_tools import update_user_preferences_tool, user_profile_tool
 from memory.session_store import JSONSessionStore, SessionManager, SessionStore, SQLiteSessionStore
 from tools.session_tools import session_toolkit
 from tools.wardrobe_store import SQLiteWardrobeStore
@@ -60,7 +60,10 @@ class FashionConciergeApp:
         self.wardrobe_tool_defs = self.wardrobe_tools.tool_defs()
         self.ingestion_tool_defs = [fetch_product_page_tool(), parse_product_html_tool()]
         self.session_tool_defs = session_toolkit(self.session_manager)
-        self.memory_tool_defs = [user_profile_tool(self.memory_service)]
+        self.memory_tool_defs = [
+            user_profile_tool(self.memory_service),
+            update_user_preferences_tool(self.memory_service),
+        ]
 
         all_ingestion_tools = self.wardrobe_tool_defs + self.ingestion_tool_defs + self.session_tool_defs
 
@@ -266,11 +269,89 @@ class FashionConciergeApp:
             session_id=session_id,
         )
 
+    def converse_with_memory(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        message: str,
+        preference_updates: dict | None = None,
+    ) -> dict:
+        """Lightweight conversational entry point that persists preferences.
+
+        The method echoes stored preferences to demonstrate end-to-end memory.
+        It records both turns in the session store so downstream tools can use
+        the same history surfaced through ``session_tool_defs``.
+        """
+
+        with operation_context("app:converse_with_memory", session_id=session_id) as correlation_id:
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="app_call_started",
+                agent="app",
+                method="converse_with_memory",
+                session_id=session_id,
+                correlation_id=correlation_id,
+            )
+
+            if self.session_manager:
+                self.session_manager.record_turn(session_id, role="user", content=message)
+
+            if preference_updates:
+                stored_preferences = self.memory_service.update_user_preferences(
+                    user_id=user_id, updates=preference_updates
+                )
+                if self.session_manager:
+                    self.session_manager.record_event(
+                        session_id,
+                        event_type="preference_update",
+                        payload=preference_updates,
+                    )
+            else:
+                stored_preferences = self.memory_service.get_user_profile(user_id=user_id)
+
+            response_message = self._render_memory_response(message, stored_preferences)
+
+            if self.session_manager:
+                self.session_manager.record_turn(session_id, role="assistant", content=response_message)
+
+            log_event(
+                LOGGER,
+                level=logging.INFO,
+                event="app_call_completed",
+                agent="app",
+                method="converse_with_memory",
+                session_id=session_id,
+                correlation_id=correlation_id,
+            )
+
+            return {
+                "status": "ok",
+                "session_id": session_id,
+                "message": response_message,
+                "preferences": stored_preferences,
+            }
+
     def send_test_message(self, message: str, session_id: str | None = None) -> str:
         """Send a test message through the orchestrator for local verification."""
 
         response = self.orchestrator.handle_message(message, session_id=session_id)
         return response["message"]
+
+    @staticmethod
+    def _render_memory_response(message: str, preferences: dict | None) -> str:
+        """Summarize saved preferences in the assistant reply."""
+
+        base = message.strip() if message else "Noted your update."
+        if not preferences:
+            return f"{base} I do not have any saved preferences yet, but I will remember future updates."
+
+        pref_summary = "; ".join(f"{key}: {value}" for key, value in preferences.items())
+        return (
+            f"{base} I've stored these preferences for future suggestions: {pref_summary}. "
+            "Tell me if you want to adjust them."
+        )
 
 
 __all__ = ["FashionConciergeApp"]
