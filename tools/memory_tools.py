@@ -18,3 +18,16 @@ def user_profile_tool(memory_service: UserMemoryService) -> genai_agent.Tool:
         description="Return the stored user profile for personalization.",
         func=instrument_tool("get_user_profile")(memory_service.get_user_profile),
     )
+
+
+def update_user_preferences_tool(memory_service: UserMemoryService) -> genai_agent.Tool:
+    """Create a tool for persisting user preference updates."""
+
+    return genai_agent.Tool(
+        name="update_user_preferences",
+        description="Store long-term user preferences to personalize future replies.",
+        func=instrument_tool("update_user_preferences")(memory_service.update_user_preferences),
+    )
+
+
+__all__ = ["user_profile_tool", "update_user_preferences_tool"]
