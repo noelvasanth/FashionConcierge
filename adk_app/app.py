@@ -266,10 +266,10 @@ class FashionConciergeApp:
             session_id=session_id,
         )
 
-    def send_test_message(self, message: str) -> str:
+    def send_test_message(self, message: str, session_id: str | None = None) -> str:
         """Send a test message through the orchestrator for local verification."""
 
-        response = self.orchestrator.handle_message(message)
+        response = self.orchestrator.handle_message(message, session_id=session_id)
         return response["message"]
 
 
