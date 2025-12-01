@@ -216,8 +216,10 @@ class FashionConciergeApp:
                 },
             }
 
+            safe_response = self._json_safe(response)
+
             try:
-                OutfitResponse.model_validate(response)
+                OutfitResponse.model_validate(safe_response)
             except ValidationError as exc:
                 log_event(
                     LOGGER,
@@ -234,7 +236,7 @@ class FashionConciergeApp:
                 self.session_manager.record_event(
                     session_id,
                     event_type="outfit_plan",
-                    payload=response,
+                    payload=safe_response,
                 )
 
             log_event(
@@ -245,10 +247,10 @@ class FashionConciergeApp:
                 method="orchestrate_outfit",
                 session_id=session_id,
                 correlation_id=correlation_id,
-                outfit_count=len(response["top_outfits"]),
+                outfit_count=len(safe_response["top_outfits"]),
             )
 
-            return response
+            return safe_response
 
     def plan_outfit(
         self,
@@ -338,6 +340,37 @@ class FashionConciergeApp:
 
         response = self.orchestrator.handle_message(message, session_id=session_id)
         return response["message"]
+
+    @staticmethod
+    def _json_safe(obj):
+        """Recursively convert Pydantic models, dataclasses and dates to JSON friendly types."""
+
+        from datetime import date, datetime
+        from dataclasses import asdict, is_dataclass
+        from pydantic import BaseModel
+
+        # Pydantic model
+        if isinstance(obj, BaseModel):
+            return obj.model_dump()
+
+        # Dataclass
+        if is_dataclass(obj):
+            return asdict(obj)
+
+        # Date and datetime
+        if isinstance(obj, (date, datetime)):
+            return obj.isoformat()
+
+        # Dict
+        if isinstance(obj, dict):
+            return {k: FashionConciergeApp._json_safe(v) for k, v in obj.items()}
+
+        # List or tuple
+        if isinstance(obj, (list, tuple)):
+            return [FashionConciergeApp._json_safe(v) for v in obj]
+
+        # Leave all other primitives as is
+        return obj
 
     @staticmethod
     def _render_memory_response(message: str, preferences: dict | None) -> str:
