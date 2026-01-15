@@ -19,6 +19,7 @@ describe("AppShell", () => {
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Outfits")).toBeInTheDocument();
     expect(screen.getByText("Wardrobe")).toBeInTheDocument();
+    expect(screen.getByText("Reviewer")).toBeInTheDocument();
   });
 
   it("opens the mobile navigation menu", async () => {

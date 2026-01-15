@@ -3,16 +3,18 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { useToast } from "../components/ui/use-toast";
 import { useCreateSession } from "../lib/api/hooks";
+import { getSession, getUserId, setSession } from "../lib/session/session";
+import { formatErrorMessage } from "../lib/telemetry/telemetry";
 
 const OnboardingPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [userId, setUserId] = useState(
-    () => localStorage.getItem("userId") ?? crypto.randomUUID()
+    () => getUserId() ?? crypto.randomUUID()
   );
   const createSession = useCreateSession();
 
-  const hasSession = useMemo(() => Boolean(localStorage.getItem("sessionId")), []);
+  const hasSession = useMemo(() => Boolean(getSession()), []);
 
   if (hasSession) {
     return <Navigate to="/app/planner" replace />;
@@ -22,7 +24,7 @@ const OnboardingPage = () => {
     event.preventDefault();
     try {
       const result = await createSession.mutateAsync({ userId });
-      localStorage.setItem("userId", userId);
+      setSession({ userId, sessionId: result.sessionId });
       toast({
         title: "Session created",
         description: `Session ${result.sessionId} is ready.`
@@ -32,7 +34,7 @@ const OnboardingPage = () => {
       toast({
         variant: "destructive",
         title: "Unable to create session",
-        description: error instanceof Error ? error.message : "Please try again."
+        description: formatErrorMessage(error)
       });
     }
   };

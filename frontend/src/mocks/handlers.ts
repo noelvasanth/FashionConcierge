@@ -1,5 +1,48 @@
 import { http, HttpResponse } from "msw";
 
+let wardrobeItems = [
+  {
+    id: "wardrobe-1",
+    name: "Navy Trench",
+    category: "outerwear",
+    color: "navy",
+    season: ["cold_weather"],
+    imageUrl: "https://placehold.co/300x300",
+    tags: ["business", "casual"]
+  },
+  {
+    id: "wardrobe-2",
+    name: "White Tee",
+    category: "top",
+    color: "white",
+    season: ["all_year"],
+    imageUrl: "https://placehold.co/300x300",
+    tags: ["casual"]
+  },
+  {
+    id: "wardrobe-3",
+    name: "Charcoal Trousers",
+    category: "bottom",
+    color: "charcoal",
+    season: ["all_year"],
+    imageUrl: "https://placehold.co/300x300",
+    tags: ["business"]
+  }
+];
+
+let nextWardrobeId = 4;
+let feedbackItems: Array<{
+  id: string;
+  userId: string;
+  sessionId: string;
+  page: string;
+  traceId?: string;
+  rating: "up" | "down";
+  comment?: string;
+  createdAt: string;
+}> = [];
+let nextFeedbackId = 1;
+
 export const handlers = [
   http.post("/chat", async ({ request }) => {
     const body = (await request.json()) as { message: string; mood?: string };
@@ -13,6 +56,12 @@ export const handlers = [
           rationale: "Balanced casual layers for an urban mood."
         }
       ]
+    });
+  }),
+  http.post("/orchestrate/chat", async ({ request }) => {
+    const body = (await request.json()) as { message: string };
+    return HttpResponse.json({
+      reply: `Mocked orchestrator reply for: ${body.message}`
     });
   }),
   http.get("/outfits", () => {
@@ -34,52 +83,29 @@ export const handlers = [
     });
   }),
   http.get("/wardrobe", () => {
-    return HttpResponse.json({
-      items: [
-        {
-          itemId: "coat-1",
-          userId: "user-1",
-          imageUrl: "https://placehold.co/300x300",
-          sourceUrl: "https://example.com/coat",
-          category: "outerwear",
-          subCategory: "coat",
-          colors: ["navy"],
-          materials: ["wool"],
-          brand: "Everlane",
-          fit: "relaxed",
-          seasonTags: ["cold_weather"],
-          styleTags: ["business", "casual"]
-        },
-        {
-          itemId: "tee-4",
-          userId: "user-1",
-          imageUrl: "https://placehold.co/300x300",
-          sourceUrl: "https://example.com/tee",
-          category: "top",
-          subCategory: "tee",
-          colors: ["white"],
-          materials: ["cotton"],
-          brand: "COS",
-          fit: "slim",
-          seasonTags: ["all_year"],
-          styleTags: ["casual"]
-        },
-        {
-          itemId: "pants-2",
-          userId: "user-1",
-          imageUrl: "https://placehold.co/300x300",
-          sourceUrl: "https://example.com/pants",
-          category: "bottom",
-          subCategory: "trousers",
-          colors: ["charcoal"],
-          materials: ["cotton"],
-          brand: "Uniqlo",
-          fit: "slim",
-          seasonTags: ["all_year"],
-          styleTags: ["business"]
-        }
-      ]
-    });
+    return HttpResponse.json({ items: wardrobeItems });
+  }),
+  http.post("/wardrobe", async ({ request }) => {
+    const body = (await request.json()) as Omit<(typeof wardrobeItems)[number], "id">;
+    const item = { id: `wardrobe-${nextWardrobeId++}`, ...body };
+    wardrobeItems = [...wardrobeItems, item];
+    return HttpResponse.json(item);
+  }),
+  http.put("/wardrobe/:id", async ({ request, params }) => {
+    const body = (await request.json()) as Omit<(typeof wardrobeItems)[number], "id">;
+    const { id } = params;
+    const index = wardrobeItems.findIndex((item) => item.id === id);
+    if (index === -1) {
+      return HttpResponse.json({ message: "Wardrobe item not found" }, { status: 404 });
+    }
+    const updated = { id: String(id), ...body };
+    wardrobeItems = wardrobeItems.map((item) => (item.id === id ? updated : item));
+    return HttpResponse.json(updated);
+  }),
+  http.delete("/wardrobe/:id", ({ params }) => {
+    const { id } = params;
+    wardrobeItems = wardrobeItems.filter((item) => item.id !== id);
+    return HttpResponse.json({ ok: true });
   }),
   http.post("/sessions", async ({ request }) => {
     const body = (await request.json()) as { userId?: string };
@@ -112,5 +138,14 @@ export const handlers = [
         calendar: { summary: "Office day with evening social plan" }
       }
     });
+  }),
+  http.get("/feedback", () => {
+    return HttpResponse.json({ items: feedbackItems.slice(0, 20) });
+  }),
+  http.post("/feedback", async ({ request }) => {
+    const body = (await request.json()) as Omit<(typeof feedbackItems)[number], "id">;
+    const record = { id: `feedback-${nextFeedbackId++}`, ...body };
+    feedbackItems = [record, ...feedbackItems].slice(0, 20);
+    return HttpResponse.json(record);
   })
 ];

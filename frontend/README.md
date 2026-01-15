@@ -26,6 +26,8 @@ Create a `.env` file in `frontend/`:
 
 ```
 VITE_API_BASE_URL=http://localhost:8000
+VITE_CHAT_ENDPOINT=/chat
+VITE_DISABLE_MSW=false
 ```
 
 If `VITE_API_BASE_URL` is not set, the frontend uses relative URLs which work with MSW and any
@@ -35,17 +37,29 @@ proxy setup.
 
 MSW starts automatically in dev. Mock handlers live in `src/mocks/handlers.ts`.
 
-To turn off MSW, either build for production (`npm run build`) or remove the `enableMocks()` call
-in `src/main.tsx`.
+To turn off MSW, either build for production (`npm run build`) or set `VITE_DISABLE_MSW=true` in
+your `.env` file.
+
+## Chat Endpoint Configuration
+
+Set `VITE_CHAT_ENDPOINT` to override the default `/chat` endpoint. This is useful if your backend
+exposes `/orchestrate/chat` or another route.
+
+## PWA Testing
+
+1. Run `npm run dev` (PWA service workers are enabled in dev).
+2. Open the app in Chrome and look for the install icon in the address bar.
+3. Use DevTools → Application → Service Workers to confirm registration.
+4. Use DevTools → Application → Manifest to verify the manifest configuration.
 
 ## Pointing to a Real Backend
 
 1. Start the backend server.
 2. Set `VITE_API_BASE_URL` to the backend URL.
-3. Restart the dev server so the env var is picked up.
-4. Disable MSW in dev by commenting out `enableMocks()` in `src/main.tsx` or by running a
-   production build/preview.
-5. Confirm the Phase 2 flows by visiting `/onboarding` to create a session, then `/app/planner`
+3. If the chat route is not `/chat`, set `VITE_CHAT_ENDPOINT` accordingly.
+4. Restart the dev server so the env var is picked up.
+5. Disable MSW in dev by setting `VITE_DISABLE_MSW=true` or by running a production build/preview.
+6. Confirm the Phase 2 flows by visiting `/onboarding` to create a session, then `/app/planner`
    to call the real orchestrator endpoints.
 
 ## Scripts
@@ -56,3 +70,4 @@ in `src/main.tsx`.
 - `npm run lint` — ESLint
 - `npm run typecheck` — TypeScript typecheck
 - `npm run test` — Run Vitest tests
+- `npm run test:watch` — Run Vitest in watch mode

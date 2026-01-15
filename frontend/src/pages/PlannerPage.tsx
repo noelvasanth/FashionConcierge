@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Feedback } from "../components/Feedback";
 import { Button } from "../components/ui/button";
 import { useToast } from "../components/ui/use-toast";
 import { useOrchestrateContext, useOrchestrateOutfit } from "../lib/api/hooks";
@@ -9,6 +10,8 @@ import type {
   OrchestrateContextResponse,
   OrchestrateOutfitResponse
 } from "../lib/contracts";
+import { getSession, getUserId } from "../lib/session/session";
+import { endSpan, formatErrorMessage, startSpan, trackEvent } from "../lib/telemetry/telemetry";
 
 const plannerSchema = z.object({
   date: z.string().min(1, "Select a date"),
@@ -26,8 +29,8 @@ const PlannerPage = () => {
   const orchestrateOutfit = useOrchestrateOutfit();
   const orchestrateContext = useOrchestrateContext();
 
-  const sessionId = useMemo(() => localStorage.getItem("sessionId"), []);
-  const userId = useMemo(() => localStorage.getItem("userId") ?? "guest", []);
+  const sessionId = useMemo(() => getSession()?.sessionId, []);
+  const userId = useMemo(() => getUserId() ?? "guest", []);
 
   const {
     register,
@@ -44,6 +47,10 @@ const PlannerPage = () => {
   });
 
   const onSubmit = async (values: PlannerFormValues) => {
+    const spanId = startSpan("planner.submit", {
+      contextOnly: values.contextOnly,
+      mood: values.mood
+    });
     const toastId = toast({
       title: values.contextOnly ? "Fetching context" : "Fetching outfits",
       description: "Talking to the orchestrator..."
@@ -66,18 +73,22 @@ const PlannerPage = () => {
         const response = await orchestrateContext.mutateAsync(payload);
         setContext(response.context);
         setOutfits(null);
+        trackEvent("planner.context.success", { sessionId });
       } else {
         const response = await orchestrateOutfit.mutateAsync(payload);
         setOutfits(response.outfits);
         setContext(null);
+        trackEvent("planner.outfit.success", { sessionId });
       }
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Planner request failed",
-        description: error instanceof Error ? error.message : "Please try again."
+        description: formatErrorMessage(error)
       });
+      trackEvent("planner.submit.error");
     } finally {
+      endSpan(spanId);
       dismiss(toastId);
     }
   };
@@ -174,6 +185,8 @@ const PlannerPage = () => {
           </pre>
         </div>
       )}
+
+      <Feedback pageLabel="planner" />
     </div>
   );
 };

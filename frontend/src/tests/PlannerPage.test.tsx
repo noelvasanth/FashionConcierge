@@ -4,9 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { server } from "../mocks/server";
 import PlannerPage from "../pages/PlannerPage";
 import { ToastContextProvider } from "../components/ui/use-toast";
+import { setSession } from "../lib/session/session";
 
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -15,7 +17,9 @@ const createWrapper = () => {
 
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <ToastContextProvider>{children}</ToastContextProvider>
+      <ToastContextProvider>
+        <MemoryRouter>{children}</MemoryRouter>
+      </ToastContextProvider>
     </QueryClientProvider>
   );
 };
@@ -23,8 +27,7 @@ const createWrapper = () => {
 describe("PlannerPage", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("sessionId", "session-123");
-    localStorage.setItem("userId", "user-123");
+    setSession({ sessionId: "session-123", userId: "user-123" });
     server.use(
       http.post("/orchestrate/outfit", () => {
         return HttpResponse.json({
