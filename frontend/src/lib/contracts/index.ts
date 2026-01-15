@@ -57,3 +57,38 @@ export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
 export const WardrobeResponseSchema = z.object({
   items: z.array(WardrobeItemSchema)
 });
+
+export const SessionResponseSchema = z.object({
+  sessionId: z.string()
+});
+
+export type SessionResponse = z.infer<typeof SessionResponseSchema>;
+
+export const OrchestrateRequestSchema = z.object({
+  userId: z.string(),
+  sessionId: z.string().optional(),
+  date: z.string(),
+  location: z.string(),
+  mood: z.string()
+});
+
+export type OrchestrateRequest = z.infer<typeof OrchestrateRequestSchema>;
+
+export const OrchestrateOutfitResponseSchema = z.object({
+  outfits: z.array(
+    z.object({
+      outfitId: z.string(),
+      name: z.string(),
+      itemIds: z.array(z.string()),
+      rationale: z.string()
+    })
+  )
+});
+
+export type OrchestrateOutfitResponse = z.infer<typeof OrchestrateOutfitResponseSchema>;
+
+export const OrchestrateContextResponseSchema = z.object({
+  context: z.record(z.unknown())
+});
+
+export type OrchestrateContextResponse = z.infer<typeof OrchestrateContextResponseSchema>;

@@ -49,3 +49,8 @@ export async function apiFetch<T>(
 
   return payload as T;
 }
+
+export const apiStream = (path: string, options?: { withCredentials?: boolean }) => {
+  // TODO: Extend to support auth headers, reconnect logic, and structured SSE payload parsing.
+  return new EventSource(`${BASE_URL}${path}`, { withCredentials: options?.withCredentials });
+};

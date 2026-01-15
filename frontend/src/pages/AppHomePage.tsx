@@ -1,9 +1,7 @@
 import { Button } from "../components/ui/button";
-import { useToast } from "../components/ui/use-toast";
+import { Link } from "react-router-dom";
 
 const AppHomePage = () => {
-  const { toast } = useToast();
-
   return (
     <div className="space-y-6">
       <header className="space-y-2">
@@ -19,16 +17,8 @@ const AppHomePage = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             Sync your calendar and weather feed to unlock tailored recommendations.
           </p>
-          <Button
-            className="mt-4"
-            onClick={() =>
-              toast({
-                title: "Connected",
-                description: "This will hook into the backend once auth is enabled."
-              })
-            }
-          >
-            Connect data sources
+          <Button asChild className="mt-4">
+            <Link to="/app/planner">Connect data sources</Link>
           </Button>
         </div>
         <div className="rounded-2xl border bg-white p-5 shadow-sm">

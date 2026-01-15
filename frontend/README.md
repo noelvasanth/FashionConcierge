@@ -43,8 +43,10 @@ in `src/main.tsx`.
 1. Start the backend server.
 2. Set `VITE_API_BASE_URL` to the backend URL.
 3. Restart the dev server so the env var is picked up.
-4. MSW will still intercept requests in dev; comment out `enableMocks()` in `src/main.tsx` when
-   you are ready to hit the backend directly.
+4. Disable MSW in dev by commenting out `enableMocks()` in `src/main.tsx` or by running a
+   production build/preview.
+5. Confirm the Phase 2 flows by visiting `/onboarding` to create a session, then `/app/planner`
+   to call the real orchestrator endpoints.
 
 ## Scripts
 

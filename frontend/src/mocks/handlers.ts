@@ -80,5 +80,37 @@ export const handlers = [
         }
       ]
     });
+  }),
+  http.post("/sessions", async ({ request }) => {
+    const body = (await request.json()) as { userId?: string };
+    return HttpResponse.json({
+      sessionId: body.userId ? `session-${body.userId}` : "session-1"
+    });
+  }),
+  http.post("/orchestrate/outfit", async () => {
+    return HttpResponse.json({
+      outfits: [
+        {
+          outfitId: "plan-1",
+          name: "Downtown Layers",
+          itemIds: ["jacket-1", "top-2", "pants-3"],
+          rationale: "Layered pieces balanced for an urban mood."
+        },
+        {
+          outfitId: "plan-2",
+          name: "Smart Casual Mix",
+          itemIds: ["blazer-1", "shirt-4", "loafer-2"],
+          rationale: "Polished but relaxed for a flexible schedule."
+        }
+      ]
+    });
+  }),
+  http.post("/orchestrate/context", async () => {
+    return HttpResponse.json({
+      context: {
+        weather: { summary: "Clear", highF: 72, lowF: 58 },
+        calendar: { summary: "Office day with evening social plan" }
+      }
+    });
   })
 ];
