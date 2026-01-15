@@ -9,6 +9,7 @@ const navItems = [
   { label: "Planner", to: "/app/planner" },
   { label: "Outfits", to: "/app/outfits" },
   { label: "Wardrobe", to: "/app/wardrobe" },
+  { label: "Reviewer", to: "/app/reviewer" },
   { label: "Settings", to: "/app/settings" }
 ];
 

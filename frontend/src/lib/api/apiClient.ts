@@ -1,14 +1,17 @@
 import type { ZodSchema } from "zod";
+import { trackError, trackEvent } from "../telemetry/telemetry";
 
 export class ApiError extends Error {
   status: number;
   details?: unknown;
+  requestId?: string;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, details?: unknown, requestId?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.details = details;
+    this.requestId = requestId;
   }
 }
 
@@ -26,10 +29,17 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit & { schema?: ZodSchema<T> } = {}
 ): Promise<T> {
+  const headers = buildHeaders(options.headers);
+  const requestId =
+    typeof headers === "object" && headers && "X-Request-Id" in headers
+      ? String(headers["X-Request-Id"])
+      : undefined;
   const response = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: buildHeaders(options.headers)
+    headers
   });
+
+  const responseRequestId = response.headers.get("x-request-id") ?? requestId;
 
   const contentType = response.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
@@ -40,8 +50,22 @@ export async function apiFetch<T>(
       typeof payload === "object" && payload && "message" in payload
         ? String((payload as { message: string }).message)
         : `Request failed with status ${response.status}`;
-    throw new ApiError(message, response.status, payload);
+    const error = new ApiError(message, response.status, payload, responseRequestId);
+    trackError(error, {
+      path,
+      method: options.method ?? "GET",
+      status: response.status,
+      requestId: responseRequestId
+    });
+    throw error;
   }
+
+  trackEvent("api.success", {
+    path,
+    method: options.method ?? "GET",
+    status: response.status,
+    requestId: responseRequestId
+  });
 
   if (options.schema) {
     return options.schema.parse(payload);
@@ -53,4 +77,18 @@ export async function apiFetch<T>(
 export const apiStream = (path: string, options?: { withCredentials?: boolean }) => {
   // TODO: Extend to support auth headers, reconnect logic, and structured SSE payload parsing.
   return new EventSource(`${BASE_URL}${path}`, { withCredentials: options?.withCredentials });
+};
+
+export const apiStreamJson = <T>(path: string, onMessage: (data: T) => void) => {
+  // TODO: replace with a robust SSE parser that validates payloads with Zod.
+  const source = apiStream(path);
+  source.addEventListener("message", (event) => {
+    try {
+      const parsed = JSON.parse((event as MessageEvent).data) as T;
+      onMessage(parsed);
+    } catch (error) {
+      trackError(error, { path, type: "sse.parse" });
+    }
+  });
+  return source;
 };

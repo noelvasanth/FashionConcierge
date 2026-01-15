@@ -38,25 +38,22 @@ export const OutfitRecommendationResponseSchema = z.object({
 export type OutfitRecommendationResponse = z.infer<typeof OutfitRecommendationResponseSchema>;
 
 export const WardrobeItemSchema = z.object({
-  itemId: z.string(),
-  userId: z.string(),
-  imageUrl: z.string().url(),
-  sourceUrl: z.string().url().optional(),
+  id: z.string(),
+  name: z.string(),
   category: z.string(),
-  subCategory: z.string().optional(),
-  colors: z.array(z.string()),
-  materials: z.array(z.string()),
-  brand: z.string(),
-  fit: z.string(),
-  seasonTags: z.array(z.string()),
-  styleTags: z.array(z.string())
+  color: z.string().optional(),
+  season: z.array(z.string()).optional(),
+  imageUrl: z.string().url().optional(),
+  tags: z.array(z.string()).optional()
 });
 
 export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
 
-export const WardrobeResponseSchema = z.object({
+export const WardrobeListResponseSchema = z.object({
   items: z.array(WardrobeItemSchema)
 });
+
+export const WardrobeMutationResponseSchema = WardrobeItemSchema;
 
 export const SessionResponseSchema = z.object({
   sessionId: z.string()
@@ -92,3 +89,20 @@ export const OrchestrateContextResponseSchema = z.object({
 });
 
 export type OrchestrateContextResponse = z.infer<typeof OrchestrateContextResponseSchema>;
+
+export const FeedbackSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  sessionId: z.string(),
+  page: z.string(),
+  traceId: z.string().optional(),
+  rating: z.enum(["up", "down"]),
+  comment: z.string().optional(),
+  createdAt: z.string()
+});
+
+export type FeedbackRecord = z.infer<typeof FeedbackSchema>;
+
+export const FeedbackListResponseSchema = z.object({
+  items: z.array(FeedbackSchema)
+});

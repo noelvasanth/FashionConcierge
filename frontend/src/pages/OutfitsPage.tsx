@@ -1,3 +1,4 @@
+import { Feedback } from "../components/Feedback";
 import { useOutfits } from "../lib/api/hooks";
 
 const OutfitsPage = () => {
@@ -25,6 +26,7 @@ const OutfitsPage = () => {
           </div>
         ))}
       </div>
+      <Feedback pageLabel="outfits" />
     </div>
   );
 };

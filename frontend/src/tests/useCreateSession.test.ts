@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
 import { server } from "../mocks/server";
 import { useCreateSession } from "../lib/api/hooks";
+import { getSession } from "../lib/session/session";
 
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -20,7 +21,7 @@ describe("useCreateSession", () => {
     localStorage.clear();
   });
 
-  it("calls /sessions, returns the sessionId, and stores it in localStorage", async () => {
+  it("calls /sessions, returns the sessionId, and stores it in session storage", async () => {
     const requestSpy = vi.fn();
     server.use(
       http.post("/sessions", async ({ request }) => {
@@ -37,7 +38,7 @@ describe("useCreateSession", () => {
     expect(response.sessionId).toBe("session-123");
 
     await waitFor(() => {
-      expect(localStorage.getItem("sessionId")).toBe("session-123");
+      expect(getSession()).toEqual({ sessionId: "session-123", userId: "user-123" });
     });
   });
 });
