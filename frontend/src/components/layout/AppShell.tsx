@@ -6,6 +6,7 @@ import { cn } from "../../lib/utils";
 
 const navItems = [
   { label: "Chat", to: "/app/chat" },
+  { label: "Planner", to: "/app/planner" },
   { label: "Outfits", to: "/app/outfits" },
   { label: "Wardrobe", to: "/app/wardrobe" },
   { label: "Settings", to: "/app/settings" }
